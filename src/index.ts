@@ -6,14 +6,69 @@ import * as path from 'path';
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
   const filePath = path.join(process.cwd(), docName);
-
+  
   if (!fs.existsSync(filePath)) {
     console.error(`Error: ${docName} not found.`);
     return;
   }
 
   console.log('Starting movie import...');
-  // ... unchanged import code ...
+  
+  try {   
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const lines = fileContent.trim().split('\n');
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Process in batches
+    const batchSize = 100;
+    for (let i = 0; i < lines.length; i += batchSize) {
+      const batch = lines.slice(i, i + batchSize);
+      const documents = [];
+      
+      for (const line of batch) {
+        try {
+          const doc = JSON.parse(line);
+          documents.push(doc);
+        } catch (e) {
+          errorCount++;
+          console.error(`Failed to parse line: ${e}`);
+        }
+      }
+      
+      if (documents.length > 0) {
+        try {
+          // Insert batch
+          for (const doc of documents) {
+            await ditto.store.execute(
+              `INSERT INTO movies DOCUMENTS (:doc)
+              ON ID CONFLICT DO UPDATE`
+            , { doc });
+            successCount++;
+          }
+          
+          if (successCount % 1000 === 0) {
+            console.log(`Imported ${successCount} movies...`);
+          }
+        } catch (e) {
+          errorCount += documents.length;
+          console.error(`Batch insert failed: ${e}`);
+        }
+      }
+    }
+    
+    console.log(`\nImport complete!`);
+    console.log(`Successfully imported: ${successCount} movies`);
+    console.log(`Errors: ${errorCount}`);
+    
+    // Show count
+    const countResult = await ditto.store.execute(`SELECT COUNT(*) as count FROM movies`);
+    console.log(`Total movies in collection: ${(countResult.items[0] as any).count}`);
+    
+  } catch (error) {
+    console.error('Import failed:', error);
+  }
 }
 
 async function main() {
