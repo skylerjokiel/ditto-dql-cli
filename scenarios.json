@@ -1,5 +1,13 @@
 {
-    "full_count": [
+    "count_all": [
         "SELECT count(*) from movies"
+    ],
+    "basic_index_test": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        "SELECT * FROM movies",
+        "SELECT * FROM movies where rated = 'APPROVED'",
+        "CREATE INDEX movies_rated on movies (rated)",
+        "SELECT * FROM movies",
+        "SELECT * FROM movies where rated = 'APPROVED'"
     ]
 }

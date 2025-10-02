@@ -76,15 +76,32 @@ async function importMovies(ditto: Ditto) {
 async function main() {
   await init();
 
-  const executeDql = async (query:string) => {
-    console.time("execute");
-    const result = await ditto.store.execute(query);
-    console.timeEnd("execute");
-    console.log(`Result Count: ${result.items.length}`);
+  const previewObject = (obj: Record<string, any>): string => {
+    const keys = Object.keys(obj);
 
-    console.log('Print full results (y/n) (default n)');
-    awaitingSubPrompt = true;
-    lastResult = result;
+    if (keys.length <= 3) {
+      return JSON.stringify(obj);
+    }
+
+    const parts: string[] = [];
+    for (const k of keys.slice(0, 3)) {
+      parts.push(JSON.stringify(k) + ":" + JSON.stringify(obj[k]));
+    }
+
+    return `{${parts.join(",")}, ...}`;
+  }
+
+  const executeDql = async (query:string) => {
+    const start = Date.now();
+    const result = await ditto.store.execute(query);
+    const elapsed = Date.now() - start;
+    console.log(`execute-time: ${applyColor(elapsed.toString(), 'yellow_highlight')}`);
+    console.log(`Result Count: ${result.items.length}\n`);
+    
+
+    // result.items.forEach((item: QueryResultItem<any>) =>
+    //   console.log(previewObject(item.value))
+    // );
   }
 
   const ditto = new Ditto({
@@ -111,9 +128,6 @@ async function main() {
   console.log('Type "exit" to quit');
   console.log('Type ".import movies" to import movies dataset\n');
 
-  let awaitingSubPrompt = false;
-  let lastResult: QueryResult<any> | undefined;
-
   rl.prompt();
 
   rl.on('line', async (line) => {
@@ -121,18 +135,6 @@ async function main() {
 
     if (input.toLowerCase() === 'exit') {
       rl.close();
-      return;
-    }
-
-    if (awaitingSubPrompt) {
-      if (input.toLowerCase() === 'y' && lastResult) {
-        lastResult.items.forEach((item: QueryResultItem<any>) =>
-          console.log(JSON.stringify(item.value))
-        );
-      }
-      awaitingSubPrompt = false;
-      lastResult = undefined;
-      rl.prompt();
       return;
     }
 
@@ -150,7 +152,7 @@ async function main() {
           
           for (let index = 0; index < scenario.length; index++) {
             const query = scenario[index];
-            console.log(`Executing: ${index + 1}/${scenario.length}`);
+            console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
             console.log(`Query: ${query}`);
             await executeDql(query);
           }
@@ -173,3 +175,14 @@ async function main() {
 }
 
 main();
+
+
+type TextColors = 'blue' | 'red' | 'green' | 'yellow_highlight'
+const applyColor = (text:string, color:TextColors) => {
+  switch(color){
+    case 'blue': return `\x1b[34m${text}\x1b[0m`;
+    case 'red': return `\x1b[31m${text}\x1b[0m`;
+    case 'green': return `\x1b[32m${text}\x1b[0m`;
+    case 'yellow_highlight': return `\x1b[43m${text}\x1b[0m`
+  }
+}
