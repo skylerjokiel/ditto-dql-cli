@@ -1,4 +1,4 @@
-import { init, Ditto } from '@dittolive/ditto';
+import { init, Ditto, QueryResult, QueryResultItem } from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -44,7 +44,7 @@ async function main() {
   console.log('Type ".import movies" to import movies dataset\n');
 
   let awaitingSubPrompt = false;
-  let lastResult: any = null;
+  let lastResult: QueryResult<any> | undefined;
 
   rl.prompt();
 
@@ -58,12 +58,12 @@ async function main() {
 
     if (awaitingSubPrompt) {
       if (input.toLowerCase() === 'y' && lastResult) {
-        lastResult.items.forEach(item =>
+        lastResult.items.forEach((item: QueryResultItem<any>) =>
           console.log(JSON.stringify(item.value))
         );
       }
       awaitingSubPrompt = false;
-      lastResult = null;
+      lastResult = undefined;
       rl.prompt();
       return;
     }
