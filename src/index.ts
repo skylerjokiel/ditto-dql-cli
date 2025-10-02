@@ -3,6 +3,8 @@ import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import scenarios from "../scenarios.json"
+
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
   const filePath = path.join(process.cwd(), docName);
@@ -74,6 +76,17 @@ async function importMovies(ditto: Ditto) {
 async function main() {
   await init();
 
+  const executeDql = async (query:string) => {
+    console.time("execute");
+    const result = await ditto.store.execute(query);
+    console.timeEnd("execute");
+    console.log(`Result Count: ${result.items.length}`);
+
+    console.log('Print full results (y/n) (default n)');
+    awaitingSubPrompt = true;
+    lastResult = result;
+  }
+
   const ditto = new Ditto({
     type: 'onlinePlayground',
     appID: '28144349-0a59-4136-9490-705a4c14e75a',
@@ -127,16 +140,23 @@ async function main() {
       try {
         if (input.toLowerCase() === '.import movies') {
           await importMovies(ditto);
-        } else {
-          console.time("execute");
-          const result = await ditto.store.execute(input);
-          console.timeEnd("execute");
-          console.log(`Result Count: ${result.items.length}`);
-
-          console.log('Print full results (y/n) (default n)');
-          awaitingSubPrompt = true;
-          lastResult = result;
-          return;
+        }
+        else if (input.toLowerCase().startsWith('.list scenarios')) {
+          console.log(Object.keys(scenarios));
+        }
+        else if (input.toLowerCase().startsWith('.run')) {
+          const scenarioName = input.split(' ')[1];
+          const scenario = scenarios[scenarioName as keyof typeof scenarios];
+          
+          for (let index = 0; index < scenario.length; index++) {
+            const query = scenario[index];
+            console.log(`Executing: ${index + 1}/${scenario.length}`);
+            console.log(`Query: ${query}`);
+            await executeDql(query);
+          }
+        }
+        else {
+          await executeDql(input);
         }
       } catch (err) {
         console.error('Error:', err);

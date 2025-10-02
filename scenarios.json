@@ -1,0 +1,5 @@
+{
+    "full_count": [
+        "SELECT count(*) from movies"
+    ]
+}
