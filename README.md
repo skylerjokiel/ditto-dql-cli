@@ -29,7 +29,7 @@ The terminal will automatically import the movie dataset on first run.
 - `.list` - Show all available scenarios with index numbers
 - `.run <name|index>` - Run a predefined scenario by name or index number (e.g., `.run count_all` or `.run 1`)
 - `.all` - Run all scenarios in sequence with comprehensive summary
-- `.bench <query>` - Benchmark a query performance (100 runs with statistics)
+- `.bench <query>` - Benchmark a query performance (20 runs with statistics)
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -140,7 +140,7 @@ Use the `.bench` command to get detailed performance statistics:
 .bench SELECT * FROM movies WHERE rated = 'APPROVED'
 ```
 
-This will run the query 100 times and provide:
+This will run the query 20 times and provide:
 - Mean, median, min, max execution times
 - Standard deviation and percentiles (95th, 99th)
 - Queries per second throughput

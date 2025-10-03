@@ -210,7 +210,42 @@ async function main() {
     await importMovies(ditto);
   }
 
-  const benchmarkQuery = async (query: string, count: number = 100) => {
+  const cleanupIndexes = async () => {
+    try {
+      // Get all existing indexes
+      const indexesResult = await ditto.store.execute("SELECT * FROM system:indexes");
+      
+      if (indexesResult.items.length === 0) {
+        console.log(`${applyColor('No indexes to clean up', 'blue')}`);
+        return;
+      }
+      
+      console.log(`${applyColor(`Cleaning up ${indexesResult.items.length} indexes...`, 'blue')}`);
+      
+      // Drop each index
+      for (const indexItem of indexesResult.items) {
+        const indexData = indexItem.value;
+        const indexId = indexData._id; // Format: "collection.index_name"
+        const collection = indexData.collection;
+        
+        // Extract index name from the ID (remove collection prefix)
+        const indexName = indexId.substring(collection.length + 1);
+        
+        try {
+          await ditto.store.execute(`DROP INDEX IF EXISTS ${indexName} ON ${collection}`);
+          console.log(`  Dropped index: ${indexName} on ${collection}`);
+        } catch (error) {
+          console.log(`  Failed to drop index ${indexName} on ${collection}: ${error}`);
+        }
+      }
+      
+      console.log(`${applyColor('Index cleanup complete', 'green')}`);
+    } catch (error) {
+      console.log(`${applyColor('Index cleanup failed:', 'red')} ${error}`);
+    }
+  };
+
+  const benchmarkQuery = async (query: string, count: number = 20) => {
     console.log(`\n${applyColor('Benchmarking Query', 'blue')}`);
     console.log(`Query: ${applyColor(query, 'green')}`);
     console.log(`Runs: ${count}`);
@@ -320,6 +355,10 @@ async function main() {
       }
     }
     
+    // Clean up indexes after scenario completes
+    console.log(`\n${applyColor('─'.repeat(50), 'blue')}`);
+    await cleanupIndexes();
+    
     return { passedTests, totalTests };
   };
 
@@ -347,7 +386,7 @@ async function main() {
       console.log('  .list    - List all available scenarios');
       console.log('  .run <name|index> - Run a scenario by name or index number');
       console.log('  .all     - Run all scenarios in sequence');
-      console.log('  .bench <query> - Benchmark a query (100 runs)');
+      console.log('  .bench <query> - Benchmark a query (20 runs)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -413,6 +452,11 @@ async function main() {
           const scenarioResults: { name: string; passed: number; total: number; status: 'pass' | 'fail' | 'no-tests' }[] = [];
           
           console.log(`\n${applyColor('Running all scenarios...', 'blue')}`);
+          console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
+          
+          // Clean up any existing indexes before starting
+          console.log(`${applyColor('Pre-run cleanup:', 'blue')}`);
+          await cleanupIndexes();
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
           
           for (const scenarioName of scenarioKeys) {
@@ -491,7 +535,7 @@ async function main() {
             query = query.slice(1, -1);
           }
           
-          await benchmarkQuery(query, 100);
+          await benchmarkQuery(query, 20);
         }
         else {
           await executeDql(input, undefined, undefined, undefined, true, rl);
