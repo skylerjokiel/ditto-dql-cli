@@ -28,6 +28,8 @@ The terminal will automatically import the movie dataset on first run.
 - `.help` - Show help message with all available commands
 - `.list` - Show all available scenarios with index numbers
 - `.run <name|index>` - Run a predefined scenario by name or index number (e.g., `.run count_all` or `.run 1`)
+- `.all` - Run all scenarios in sequence with comprehensive summary
+- `.bench <query>` - Benchmark a query performance (100 runs with statistics)
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries

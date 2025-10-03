@@ -194,6 +194,71 @@ async function main() {
     await importMovies(ditto);
   }
 
+  const benchmarkQuery = async (query: string, count: number = 100) => {
+    console.log(`\n${applyColor('Benchmarking Query', 'blue')}`);
+    console.log(`Query: ${applyColor(query, 'green')}`);
+    console.log(`Runs: ${count}`);
+    console.log(`${applyColor('─'.repeat(50), 'blue')}`);
+    
+    const times: number[] = [];
+    let resultCount = 0;
+    
+    console.log('Running benchmark...');
+    
+    for (let i = 0; i < count; i++) {
+      const start = Date.now();
+      try {
+        const result = await ditto.store.execute(query);
+        const elapsed = Date.now() - start;
+        times.push(elapsed);
+        if (i === 0) resultCount = result.items.length; // Store result count from first run
+        
+        // Show progress every 20% or every 10 runs for small counts
+        const progressInterval = Math.max(1, Math.floor(count / 5));
+        if ((i + 1) % progressInterval === 0 || i === count - 1) {
+          const percent = Math.round(((i + 1) / count) * 100);
+          console.log(`Progress: ${percent}% (${i + 1}/${count})`);
+        }
+      } catch (error) {
+        console.error(`Error on run ${i + 1}:`, error);
+        return;
+      }
+    }
+    
+    // Calculate statistics
+    times.sort((a, b) => a - b);
+    const sum = times.reduce((a, b) => a + b, 0);
+    const mean = sum / times.length;
+    const median = times.length % 2 === 0 
+      ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2
+      : times[Math.floor(times.length / 2)];
+    const min = times[0];
+    const max = times[times.length - 1];
+    const p95 = times[Math.floor(times.length * 0.95)];
+    const p99 = times[Math.floor(times.length * 0.99)];
+    
+    // Calculate standard deviation
+    const variance = times.reduce((acc, time) => acc + Math.pow(time - mean, 2), 0) / times.length;
+    const stdDev = Math.sqrt(variance);
+    
+    console.log(`\n${applyColor('Benchmark Results', 'blue')}`);
+    console.log(`${applyColor('═'.repeat(50), 'blue')}`);
+    console.log(`Result Count: ${resultCount}`);
+    console.log(`Total Runs: ${count}`);
+    console.log(`\nTiming Statistics (ms):`);
+    console.log(`  Mean:     ${mean.toFixed(2)}`);
+    console.log(`  Median:   ${median.toFixed(2)}`);
+    console.log(`  Min:      ${min}`);
+    console.log(`  Max:      ${max}`);
+    console.log(`  Std Dev:  ${stdDev.toFixed(2)}`);
+    console.log(`  95th %:   ${p95}`);
+    console.log(`  99th %:   ${p99}`);
+    console.log(`\nThroughput:`);
+    console.log(`  Queries/sec: ${(1000 / mean).toFixed(2)}`);
+    console.log(`  Total time:  ${(sum / 1000).toFixed(2)}s`);
+    console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
+  };
+
   const runScenario = async (scenarioName: string, scenario: ScenarioQuery[]) => {
     console.log(`\nRunning scenario: ${scenarioName}`);
     let passedTests = 0;
@@ -266,6 +331,7 @@ async function main() {
       console.log('  .list    - List all available scenarios');
       console.log('  .run <name|index> - Run a scenario by name or index number');
       console.log('  .all     - Run all scenarios in sequence');
+      console.log('  .bench <query> - Benchmark a query (100 runs)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -391,6 +457,25 @@ async function main() {
             console.log('\nNo validation tests were run.');
           }
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
+        }
+        else if (input.toLowerCase().startsWith('.bench')) {
+          const queryStart = input.indexOf(' ') + 1;
+          if (queryStart === 0) {
+            console.log('Usage: .bench <query>');
+            console.log('Example: .bench SELECT * FROM movies LIMIT 10');
+            rl.prompt();
+            return;
+          }
+          
+          let query = input.substring(queryStart).trim();
+          
+          // Remove quotes if present
+          if ((query.startsWith('"') && query.endsWith('"')) || 
+              (query.startsWith("'") && query.endsWith("'"))) {
+            query = query.slice(1, -1);
+          }
+          
+          await benchmarkQuery(query, 100);
         }
         else {
           await executeDql(input);
