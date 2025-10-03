@@ -95,7 +95,7 @@ async function main() {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
-    console.log(`execute-time: ${applyColor(elapsed.toString(), 'yellow_highlight')}`);
+    console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
     console.log(`Result Count: ${result.items.length}\n`);
     
 
@@ -143,7 +143,7 @@ async function main() {
         if (input.toLowerCase() === '.import movies') {
           await importMovies(ditto);
         }
-        else if (input.toLowerCase().startsWith('.list scenarios')) {
+        else if (input.toLowerCase().startsWith('.scenarios')) {
           console.log(Object.keys(scenarios));
         }
         else if (input.toLowerCase().startsWith('.run')) {
@@ -153,7 +153,7 @@ async function main() {
           for (let index = 0; index < scenario.length; index++) {
             const query = scenario[index];
             console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
-            console.log(`Query: ${query}`);
+            console.log(`Query: ${applyColor(query, 'green')}`);
             await executeDql(query);
           }
         }
