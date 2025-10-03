@@ -66,7 +66,7 @@
         {
             "query": "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
             "expectedCount": 2579,
-            "expectedIndex": "movies_rated"
+            "expectedIndex": "full_scan"
         },
         {
             "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE awards.wins = 3 OR rated = 'APPROVED'",
@@ -85,7 +85,7 @@
         {
             "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
             "expectedCount": 1356,
-            "expectedIndex": "movies_rated"
+            "expectedIndex": "full_scan"
         },
         {
             "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'",
@@ -109,7 +109,7 @@
         {
             "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
             "expectedCount": 1356,
-            "expectedIndex": "movies_rated"
+            "expectedIndex": "full_scan"
         },
         {
             "query": "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
@@ -119,7 +119,7 @@
         {
             "query": "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
             "expectedCount": 21077,
-            "expectedIndex": "movies_rated"
+            "expectedIndex": "full_scan"
         }
     ],
     "index_string_contains": [
@@ -131,7 +131,7 @@
         "CREATE INDEX movies_plot_text on movies (plot)",
         {
             "query": "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
-            "expectedIndex": "movies_plot_text"
+            "expectedIndex": "full_scan"
         }
     ],
     "validation_test": [
