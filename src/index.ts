@@ -685,8 +685,8 @@ async function main() {
       const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
       
       if (comparisonBaselines.length > 0) {
-        console.log(`\n${applyColor('Version Comparisons', 'blue')}`);
-        console.log(`${applyColor('─'.repeat(40), 'blue')}`);
+        console.log(`\n${applyColor(`Version Comparisons (current: v${dittoVersion})`, 'blue')}`);
+        console.log(`${applyColor('─'.repeat(50), 'blue')}`);
         
         const formatDiff = (diff: number) => {
           const sign = diff >= 0 ? '+' : '';
@@ -703,8 +703,8 @@ async function main() {
         // Check if baseline exists for current version
         const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
         if (currentBaseline) {
-          console.log(`\n${applyColor('Baseline Comparison', 'blue')}`);
-          console.log(`${applyColor('─'.repeat(25), 'blue')}`);
+          console.log(`\n${applyColor(`Baseline Comparison (current: v${dittoVersion})`, 'blue')}`);
+          console.log(`${applyColor('─'.repeat(40), 'blue')}`);
           
           const meanDiff = ((mean - currentBaseline.metrics.mean) / currentBaseline.metrics.mean) * 100;
           const formatDiff = (diff: number) => {
@@ -1052,6 +1052,32 @@ async function main() {
             console.log(`${applyColor(`Creating baseline: ${benchmarkName}`, 'blue')}`);
             console.log(`Hash: ${hash}`);
             
+            // Check if baseline already exists
+            const existingBaseline = await getBaseline(ditto, hash, dittoVersion);
+            if (existingBaseline) {
+              console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'yellow_highlight')}`);
+              console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
+              
+              const answer = await new Promise<string>((resolve) => {
+                const rl = readline.createInterface({
+                  input: process.stdin,
+                  output: process.stdout
+                });
+                rl.question('Overwrite existing baseline? (y/N): ', (answer) => {
+                  rl.close();
+                  resolve(answer.toLowerCase().trim());
+                });
+              });
+              
+              if (answer !== 'y' && answer !== 'yes') {
+                console.log(`${applyColor('Skipped baseline creation for:', 'blue')} ${benchmarkName}`);
+                console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
+                continue;
+              }
+              
+              console.log(`${applyColor('Overwriting existing baseline...', 'blue')}`);
+            }
+            
             // Run pre-queries if they exist
             if (benchmark.preQueries && benchmark.preQueries.length > 0) {
               console.log(`${applyColor('Running setup queries...', 'blue')}`);
@@ -1062,7 +1088,7 @@ async function main() {
             }
             
             console.log(`Query: ${benchmark.query}`);
-            const results = await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || [], false);
+            const results = await benchmarkQuery(benchmark.query, 50, benchmark.preQueries || [], false);
             
             // Create baseline document
             const baseline: BenchmarkBaseline = {
@@ -1080,7 +1106,7 @@ async function main() {
                 p95: results.p95,
                 p99: results.p99,
                 resultCount: results.resultCount,
-                runs: 20,
+                runs: 50,
                 timestamp: new Date().toISOString()
               }
             };
