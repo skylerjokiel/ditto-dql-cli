@@ -41,6 +41,16 @@
         "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
         "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
     ],
+    "index_id_and_field_with_or_basic_with_explain": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        "SELECT * FROM movies WHERE rated = 'APPROVED'",
+        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        "CREATE INDEX movies_rated on movies (rated)",
+        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
+    ],
     "index_id_and_field_with_or_advanced": [
         "DROP INDEX IF EXISTS movies_rated on movies",
         "SELECT * FROM movies WHERE rated = 'APPROVED'",

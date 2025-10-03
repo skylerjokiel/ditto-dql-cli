@@ -2,6 +2,10 @@
 
 A simple command-line interface for running DQL queries against a Ditto database with a movie dataset.
 
+> This application is designed for local DQL query execution and **does not enable sync** intentionally.
+
+> To reset the database stop the application and delete the `./ditto` directory from the root.
+
 ## Getting Started
 
 1. Install dependencies:
@@ -64,7 +68,7 @@ To add a new scenario, edit `scenarios.json`. Scenarios  and add your queries:
 }
 ```
 
-Then run it with `.run my_scenario`
+Stop and restart the app then run it with `.run my_scenario`
 
 ## License
 
