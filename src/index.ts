@@ -151,7 +151,7 @@ async function main() {
           const scenarioKeys = Object.keys(scenarios);
           console.log('\nAvailable scenarios:');
           scenarioKeys.forEach((key, index) => {
-            console.log(`  ${index + 1}. ${key}`);
+            console.log(`  ${index + 1}. ${applyColor(key, 'green')}`);
           });
           console.log();
         }
