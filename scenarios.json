@@ -1,4 +1,10 @@
 {
+    "select_all": [
+        {
+            "query": "SELECT * from movies",
+            "expectedCount": 23539
+        }
+    ],
     "count_all": [
         "SELECT count(*) from movies",
         "EXPLAIN SELECT count(*) from movies"
@@ -81,5 +87,24 @@
         "CREATE INDEX movies_plot_text on movies (plot)",
         "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
         "EXPLAIN SELECT plot FROM movies WHERE CONTAINS(plot, 'love')"
+    ],
+    "validation_test": [
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'PG' LIMIT 5",
+            "expectedCount": 5
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '1999'",
+            "expectedCount": 93
+        },
+        {
+            "query": "SELECT * FROM movies WHERE runtime < 10",
+            "expectedCount": 146
+        },
+        "SELECT * FROM movies WHERE rated = 'G'",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins > 10",
+            "expectedCount": 146
+        }
     ]
 }

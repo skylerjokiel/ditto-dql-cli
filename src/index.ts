@@ -5,6 +5,11 @@ import * as path from 'path';
 
 import scenarios from "../scenarios.json"
 
+type ScenarioQuery = string | {
+  query: string;
+  expectedCount?: number;
+}
+
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
   const filePath = path.join(process.cwd(), docName);
@@ -76,18 +81,30 @@ async function importMovies(ditto: Ditto) {
 async function main() {
   await init();
 
-  const executeDql = async (query:string) => {
+  const executeDql = async (query:string, expectedCount?: number) => {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
     console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
-    console.log(`Result Count: ${result.items.length}\n`);
+    console.log(`Result Count: ${result.items.length}`);
+    
+    // Validate expected count if provided
+    if (expectedCount !== undefined) {
+      if (result.items.length === expectedCount) {
+        console.log(`Validation: ${applyColor('✓ PASSED', 'green')} - Expected ${expectedCount} documents`);
+      } else {
+        console.log(`Validation: ${applyColor('✗ FAILED', 'red')} - Expected ${expectedCount} documents, got ${result.items.length}`);
+      }
+    }
+    console.log();
     
     // If it's an explain or profile we'll log it.
     const qLower = query.toLowerCase();
     if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
       console.log(JSON.stringify(result.items[0].value,null, 2));
     }
+    
+    return result;
   }
 
   const ditto = new Ditto({
@@ -137,6 +154,9 @@ async function main() {
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
       console.log('  - Queries starting with EXPLAIN will show execution plan');
+      console.log('\nScenario validation:');
+      console.log('  - Scenarios can now include expected result counts');
+      console.log('  - Queries with expectedCount will be validated automatically');
       console.log('\nExample queries:');
       console.log('  SELECT * FROM movies LIMIT 10');
       console.log('  SELECT title FROM movies WHERE year > 2020');
@@ -184,11 +204,39 @@ async function main() {
           }
           
           console.log(`\nRunning scenario: ${scenarioName}`);
+          let passedTests = 0;
+          let totalTests = 0;
+          
           for (let index = 0; index < scenario.length; index++) {
-            const query = scenario[index];
+            const item = scenario[index] as ScenarioQuery;
+            let query: string;
+            let expectedCount: number | undefined;
+            
+            if (typeof item === 'string') {
+              query = item;
+            } else {
+              query = item.query;
+              expectedCount = item.expectedCount;
+              if (expectedCount !== undefined) totalTests++;
+            }
+            
             console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
             console.log(`Query: ${applyColor(query, 'green')}`);
-            await executeDql(query);
+            
+            const result = await executeDql(query, expectedCount);
+            
+            if (expectedCount !== undefined && result.items.length === expectedCount) {
+              passedTests++;
+            }
+          }
+          
+          if (totalTests > 0) {
+            console.log(`\nScenario Summary: ${passedTests}/${totalTests} tests passed`);
+            if (passedTests === totalTests) {
+              console.log(applyColor('All tests passed! ✓', 'green'));
+            } else {
+              console.log(applyColor(`${totalTests - passedTests} tests failed ✗`, 'red'));
+            }
           }
         }
         else {
