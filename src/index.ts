@@ -83,8 +83,9 @@ async function main() {
     console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
     console.log(`Result Count: ${result.items.length}\n`);
     
-    // If it's an explain we'll log it.
-    if (query.toLowerCase().startsWith("explain")) {
+    // If it's an explain or profile we'll log it.
+    const qLower = query.toLowerCase();
+    if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
       console.log(JSON.stringify(result.items[0].value,null, 2));
     }
   }

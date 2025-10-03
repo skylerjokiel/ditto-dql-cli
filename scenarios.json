@@ -1,6 +1,7 @@
 {
     "count_all": [
-        "SELECT count(*) from movies"
+        "SELECT count(*) from movies",
+        "EXPLAIN SELECT count(*) from movies"
     ],
     "index_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",
