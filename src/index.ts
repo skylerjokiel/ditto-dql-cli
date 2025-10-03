@@ -76,21 +76,6 @@ async function importMovies(ditto: Ditto) {
 async function main() {
   await init();
 
-  const previewObject = (obj: Record<string, any>): string => {
-    const keys = Object.keys(obj);
-
-    if (keys.length <= 3) {
-      return JSON.stringify(obj);
-    }
-
-    const parts: string[] = [];
-    for (const k of keys.slice(0, 3)) {
-      parts.push(JSON.stringify(k) + ":" + JSON.stringify(obj[k]));
-    }
-
-    return `{${parts.join(",")}, ...}`;
-  }
-
   const executeDql = async (query:string) => {
     const start = Date.now();
     const result = await ditto.store.execute(query);
@@ -98,10 +83,10 @@ async function main() {
     console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
     console.log(`Result Count: ${result.items.length}\n`);
     
-
-    // result.items.forEach((item: QueryResultItem<any>) =>
-    //   console.log(previewObject(item.value))
-    // );
+    // If it's an explain we'll log it.
+    if (query.toLowerCase().startsWith("explain")) {
+      console.log(JSON.stringify(result.items[0].value,null, 2));
+    }
   }
 
   const ditto = new Ditto({
@@ -117,6 +102,12 @@ async function main() {
     config.connect.websocketURLs.push('wss://i83inp.cloud.dittolive.app');
   });
   await ditto.store.execute("ALTER SYSTEM SET DQL_STRICT_MODE = false");
+
+  const checkStoreResponse = await ditto.store.execute("SELECT * FROM movies LIMIT 1");
+  if (checkStoreResponse.items.length === 0) {
+    console.log("Initializing the database with movie records.");
+    await importMovies(ditto);
+  }
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -140,10 +131,7 @@ async function main() {
 
     if (input) {
       try {
-        if (input.toLowerCase() === '.import movies') {
-          await importMovies(ditto);
-        }
-        else if (input.toLowerCase().startsWith('.scenarios')) {
+        if (input.toLowerCase() === '.list') {
           console.log(Object.keys(scenarios));
         }
         else if (input.toLowerCase().startsWith('.run')) {
@@ -175,7 +163,6 @@ async function main() {
 }
 
 main();
-
 
 type TextColors = 'blue' | 'red' | 'green' | 'yellow_highlight'
 const applyColor = (text:string, color:TextColors) => {
