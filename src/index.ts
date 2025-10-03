@@ -79,7 +79,7 @@ async function importMovies(ditto: Ditto) {
     console.log(`Errors: ${errorCount}`);
     
     // Show count
-    const countResult = await ditto.store.execute(`SELECT COUNT(*) as count FROM movies`);
+    const countResult = await ditto.store.execute(`SELECT COUNT(*) FROM movies`);
     console.log(`Total movies in collection: ${(countResult.items[0] as any).count}`);
     
   } catch (error) {
@@ -216,6 +216,74 @@ async function main() {
     console.log("Initializing the database with movie records.");
     await importMovies(ditto);
   }
+
+  const showSystemInfo = async () => {
+    try {
+      console.log(`\n${applyColor('System Information', 'blue')}`);
+      console.log(`${applyColor('═'.repeat(50), 'blue')}`);
+      
+      // Get document count
+      const countResult = await ditto.store.execute("SELECT COUNT(*) FROM movies");
+      
+      let documentCount = 0;
+      if (countResult.items.length > 0) {
+        const item = countResult.items[0];
+        const value = item.value;
+        // COUNT(*) returns an object like {"($1)": 23539}
+        if (value && typeof value === 'object') {
+          // Get the first (and only) value from the object
+          documentCount = Object.values(value)[0] as number;
+        }
+      }
+      
+      console.log(`\nDocument Counts:`);
+      if (documentCount !== undefined) {
+        console.log(`  movies: ${applyColor(documentCount.toString(), 'green')}`);
+      } else {
+        console.log(`  movies: ${applyColor('Unable to get count', 'red')}`);
+      }
+      
+      // Get current indexes
+      const indexesResult = await ditto.store.execute("SELECT * FROM system:indexes");
+      
+      console.log(`\nIndexes:`);
+      if (!indexesResult || !indexesResult.items || indexesResult.items.length === 0) {
+        console.log(`  ${applyColor('None', 'yellow_highlight')}`);
+      } else {
+        // Count valid indexes
+        let validIndexes = 0;
+        const indexDetails: string[] = [];
+        
+        for (const indexItem of indexesResult.items) {
+          const indexData = indexItem.value;
+          if (indexData && indexData._id && indexData.collection && indexData.fields) {
+            validIndexes++;
+            const indexId = indexData._id; // Format: "collection.index_name"
+            const collection = indexData.collection;
+            const fields = indexData.fields;
+            
+            // Extract index name from the ID
+            const indexName = indexId.substring(collection.length + 1);
+            
+            indexDetails.push(`    • ${applyColor(indexName, 'green')} on ${applyColor(collection, 'blue')} (${fields.join(', ')})`);
+          }
+        }
+        
+        console.log(validIndexes)
+        if (validIndexes === 0) {
+          console.log(`  ${applyColor('None', 'yellow_highlight')}`);
+        } else {
+          console.log(`  Total: ${applyColor(validIndexes.toString(), 'green')}`);
+          console.log(`  Details:`);
+          indexDetails.forEach(detail => console.log(detail));
+        }
+      }
+      console.log("here")
+      console.log(`\n${applyColor('═'.repeat(50), 'blue')}\n`);
+    } catch (error) {
+      console.log(`${applyColor('Failed to get system information:', 'red')} ${error}`);
+    }
+  };
 
   const cleanupIndexes = async () => {
     try {
@@ -397,6 +465,7 @@ async function main() {
       console.log('  .benchmarks - List all available benchmarks');
       console.log('  .benchmark <name|index> - Run a specific benchmark');
       console.log('  .benchmark_all - Run all benchmarks');
+      console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -641,6 +710,9 @@ async function main() {
           }
           
           await benchmarkQuery(query, 20);
+        }
+        else if (input.toLowerCase() === '.system') {
+          await showSystemInfo();
         }
         else {
           await executeDql(input, undefined, undefined, undefined, true, rl);
