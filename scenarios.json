@@ -11,6 +11,13 @@
         "SELECT * FROM movies WHERE rated = 'APPROVED'",
         "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE rated = 'APPROVED'"
     ],
+    "index_on_id_subfield": [
+        "DROP INDEX IF EXISTS movies_year on movies",
+        "SELECT * FROM movies WHERE _id.year = '2001'",
+        "CREATE INDEX movies_year on movies (_id.year)",
+        "SELECT * FROM movies WHERE _id.year = '2001'",
+        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001'"
+    ],
     "index_fields_only_with_or_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",
         "SELECT * FROM movies WHERE rated = 'APPROVED'",
