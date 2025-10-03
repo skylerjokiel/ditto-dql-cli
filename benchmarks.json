@@ -1,0 +1,20 @@
+{
+    "count": {
+        "query": "SELECT count(*) FROM movies"
+    },
+    "basic_select": {
+        "query": "SELECT * FROM movies LIMIT 100"
+    },
+    "filtered_query": {
+        "query": "SELECT * FROM movies WHERE rated = 'PG' LIMIT 50"
+    },
+    "text_search": {
+        "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love') LIMIT 20"
+    },
+    "year_filter": {
+        "query": "SELECT * FROM movies WHERE _id.year > '2000' LIMIT 50"
+    },
+    "runtime_filter": {
+        "query": "SELECT * FROM movies WHERE runtime > 120 LIMIT 50"
+    }
+}

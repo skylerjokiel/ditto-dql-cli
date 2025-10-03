@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import scenarios from "../scenarios.json"
+import benchmarks from "../benchmarks.json"
 
 type ScenarioQuery = string | {
   query: string;
@@ -387,6 +388,9 @@ async function main() {
       console.log('  .run <name|index> - Run a scenario by name or index number');
       console.log('  .all     - Run all scenarios in sequence');
       console.log('  .bench <query> - Benchmark a query (20 runs)');
+      console.log('  .benchmarks - List all available benchmarks');
+      console.log('  .benchmark <name|index> - Run a specific benchmark');
+      console.log('  .benchmark_all - Run all benchmarks');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -517,6 +521,61 @@ async function main() {
             console.log('\nNo validation tests were run.');
           }
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
+        }
+        else if (input.toLowerCase() === '.benchmarks') {
+          const benchmarkKeys = Object.keys(benchmarks);
+          console.log('\nAvailable benchmarks:');
+          benchmarkKeys.forEach((key, index) => {
+            const benchmark = benchmarks[key as keyof typeof benchmarks];
+            console.log(`  ${index + 1}. ${applyColor(key, 'green')} - ${benchmark.query}`);
+          });
+          console.log();
+        }
+        else if (input.toLowerCase().startsWith('.benchmark ')) {
+          const arg = input.split(' ')[1];
+          if (!arg) {
+            console.log('Please provide a benchmark name or index number');
+            rl.prompt();
+            return;
+          }
+          
+          const benchmarkKeys = Object.keys(benchmarks);
+          let benchmarkName: string;
+          
+          // Check if arg is a number (index)
+          const index = parseInt(arg);
+          if (!isNaN(index) && index > 0 && index <= benchmarkKeys.length) {
+            benchmarkName = benchmarkKeys[index - 1];
+          } else {
+            benchmarkName = arg;
+          }
+          
+          const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks];
+          
+          if (!benchmark) {
+            console.log(`Benchmark '${arg}' not found. Use .benchmarks to see available benchmarks.`);
+            rl.prompt();
+            return;
+          }
+          
+          console.log(`\nRunning benchmark: ${benchmarkName}`);
+          console.log(`Query: ${benchmark.query}`);
+          await benchmarkQuery(benchmark.query, 20);
+        }
+        else if (input.toLowerCase() === '.benchmark_all') {
+          const benchmarkKeys = Object.keys(benchmarks);
+          
+          console.log(`\n${applyColor('Running all benchmarks...', 'blue')}`);
+          console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
+          
+          for (const benchmarkName of benchmarkKeys) {
+            const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks];
+            console.log(`${applyColor(`Running benchmark: ${benchmarkName}`, 'blue')}`);
+            await benchmarkQuery(benchmark.query, 20);
+            console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
+          }
+          
+          console.log(`${applyColor('All benchmarks complete!', 'green')}`);
         }
         else if (input.toLowerCase().startsWith('.bench')) {
           const queryStart = input.indexOf(' ') + 1;

@@ -29,7 +29,10 @@ The terminal will automatically import the movie dataset on first run.
 - `.list` - Show all available scenarios with index numbers
 - `.run <name|index>` - Run a predefined scenario by name or index number (e.g., `.run count_all` or `.run 1`)
 - `.all` - Run all scenarios in sequence with comprehensive summary
-- `.bench <query>` - Benchmark a query performance (20 runs with statistics)
+- `.bench <query>` - Benchmark a custom query (20 runs with statistics)
+- `.benchmarks` - List all available predefined benchmarks
+- `.benchmark <name|index>` - Run a specific predefined benchmark
+- `.benchmark_all` - Run all predefined benchmarks
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -134,19 +137,44 @@ Use `.all` to run all scenarios and get a comprehensive test report.
 
 ## Performance Benchmarking
 
-Use the `.bench` command to get detailed performance statistics:
+### Custom Query Benchmarking
+
+Use the `.bench` command to benchmark any custom query:
 
 ```
 .bench SELECT * FROM movies WHERE rated = 'APPROVED'
 ```
 
-This will run the query 20 times and provide:
+This will run the query 20 times and provide detailed statistics:
 - Mean, median, min, max execution times
 - Standard deviation and percentiles (95th, 99th)
 - Queries per second throughput
 - Progress tracking during execution
 
-Perfect for comparing indexed vs non-indexed query performance!
+### Predefined Benchmarks
+
+The application includes predefined benchmark suites for common query patterns:
+
+```
+.benchmarks                    # List all available benchmarks
+.benchmark count               # Run the "count" benchmark  
+.benchmark 1                   # Run benchmark by index
+.benchmark_all                 # Run all predefined benchmarks
+```
+
+**Adding Custom Benchmarks:**
+
+Edit `benchmarks.json` to add new benchmark queries:
+
+```json
+{
+  "my_benchmark": {
+    "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100"
+  }
+}
+```
+
+Perfect for comparing indexed vs non-indexed query performance and maintaining consistent performance testing!
 
 ## Adding New Scenarios
 
