@@ -145,6 +145,8 @@ async function main() {
           const actualDesc = indexUsed === 'full_scan' ? 'full scan' : indexUsed ? `index '${indexUsed}'` : 'unknown scan type';
           const expectedDesc = expectedIndex === 'full_scan' ? 'full scan' : `index '${expectedIndex}'`;
           console.log(`Index Validation: ${applyColor('✗ FAILED', 'red')} - Expected ${expectedDesc}, but using ${actualDesc}`);
+          console.log('\nEXPLAIN output for debugging:');
+          console.log(JSON.stringify(explainResult.items[0].value, null, 2));
           indexPassed = false;
         }
       }
@@ -336,10 +338,14 @@ async function main() {
           }
           
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
-          console.log(applyColor('TEST SUMMARY', 'blue'));
+          console.log(applyColor('SUMMARY', 'blue'));
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
           
           // Scenario summary
+          const passedScenarios = scenarioResults.filter(r => r.status === 'pass').length;
+          const failedScenarios = scenarioResults.filter(r => r.status === 'fail').length;
+          const noTestScenarios = scenarioResults.filter(r => r.status === 'no-tests').length;
+          
           console.log('Scenario Results:');
           for (const result of scenarioResults) {
             const statusIcon = result.status === 'pass' ? '✓' : result.status === 'fail' ? '✗' : '-';
@@ -348,15 +354,23 @@ async function main() {
             console.log(`  ${applyColor(statusIcon, statusColor)} ${result.name}${testInfo}`);
           }
           
-          // Overall summary
+          // Scenario-level summary
           console.log(`\n${applyColor('─'.repeat(50), 'blue')}`);
+          console.log(`Scenario Summary: ${passedScenarios} passed, ${failedScenarios} failed, ${noTestScenarios} no tests`);
+          if (failedScenarios > 0) {
+            const scenarioFailRate = Math.round((failedScenarios / (passedScenarios + failedScenarios)) * 100);
+            console.log(`Scenario Fail Rate: ${scenarioFailRate}%`);
+          }
+          
+          // Test-level summary
           if (totalTestCount > 0) {
-            console.log(`\nOverall: ${totalPassed}/${totalTestCount} tests passed`);
-            const passRate = Math.round((totalPassed / totalTestCount) * 100);
+            console.log(`\nTest Summary: ${totalPassed}/${totalTestCount} tests passed`);
+            const testPassRate = Math.round((totalPassed / totalTestCount) * 100);
             if (totalPassed === totalTestCount) {
-              console.log(applyColor(`Result: PASS (100%) ✓`, 'green'));
+              console.log(applyColor(`Overall Result: PASS (100%) ✓`, 'green'));
             } else {
-              console.log(applyColor(`Result: FAIL (${passRate}%) ✗`, 'red'));
+              const testFailRate = 100 - testPassRate;
+              console.log(applyColor(`Overall Result: FAIL (${testPassRate}% pass, ${testFailRate}% fail) ✗`, 'red'));
             }
           } else {
             console.log('\nNo validation tests were run.');
