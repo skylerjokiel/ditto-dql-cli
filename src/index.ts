@@ -2,6 +2,7 @@ import { init, Ditto } from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 import scenarios from "../scenarios.json"
 import benchmarks from "../benchmarks.json"
@@ -233,6 +234,116 @@ async function main() {
       console.log(`\n${applyColor('System Information', 'blue')}`);
       console.log(`${applyColor('═'.repeat(50), 'blue')}`);
       
+      // Get Ditto version
+      let dittoVersion = 'Unknown';
+      try {
+        const dittoPackagePath = path.join(process.cwd(), 'node_modules', '@dittolive', 'ditto', 'package.json');
+        if (fs.existsSync(dittoPackagePath)) {
+          const packageJson = JSON.parse(fs.readFileSync(dittoPackagePath, 'utf8'));
+          dittoVersion = packageJson.version;
+        }
+      } catch (error) {
+        console.error('Could not read Ditto version:', error);
+      }
+      
+      console.log(`\nDitto SDK Version: ${applyColor(dittoVersion, 'green')}`);
+      
+      // Get system information
+      const platform = os.platform();
+      const arch = os.arch();
+      const release = os.release();
+      const hostname = os.hostname();
+      const uptime = Math.floor(os.uptime() / 60); // Convert to minutes
+      
+      // Memory information
+      const totalMemory = Math.round(os.totalmem() / (1024 * 1024 * 1024)); // GB
+      const freeMemory = Math.round(os.freemem() / (1024 * 1024 * 1024)); // GB
+      const usedMemory = totalMemory - freeMemory;
+      const memoryUsage = Math.round((usedMemory / totalMemory) * 100);
+      
+      // CPU information
+      const cpus = os.cpus();
+      const cpuModel = cpus[0]?.model || 'Unknown';
+      const cpuCores = cpus.length;
+      
+      // Load averages (Unix-like systems)
+      const loadAvg = os.loadavg();
+      
+      console.log(`\nSystem Information:`);
+      console.log(`  Platform: ${applyColor(`${platform} ${arch}`, 'green')}`);
+      console.log(`  OS Release: ${applyColor(release, 'green')}`);
+      console.log(`  Hostname: ${applyColor(hostname, 'green')}`);
+      console.log(`  Uptime: ${applyColor(`${uptime} minutes`, 'green')}`);
+      
+      console.log(`\nCPU Information:`);
+      console.log(`  Model: ${applyColor(cpuModel, 'green')}`);
+      console.log(`  Cores: ${applyColor(cpuCores.toString(), 'green')}`);
+      if (platform !== 'win32') {
+        console.log(`  Load Average: ${applyColor(`${loadAvg[0].toFixed(2)}, ${loadAvg[1].toFixed(2)}, ${loadAvg[2].toFixed(2)}`, 'green')}`);
+      }
+      
+      console.log(`\nMemory Information:`);
+      console.log(`  Total: ${applyColor(`${totalMemory} GB`, 'green')}`);
+      console.log(`  Used: ${applyColor(`${usedMemory} GB`, usedMemory / totalMemory > 0.8 ? 'red' : 'green')} (${memoryUsage}%)`);
+      console.log(`  Free: ${applyColor(`${freeMemory} GB`, 'green')}`);
+      
+      // Node.js Process Information
+      const processMemory = process.memoryUsage();
+      const heapUsed = Math.round(processMemory.heapUsed / (1024 * 1024)); // MB
+      const heapTotal = Math.round(processMemory.heapTotal / (1024 * 1024)); // MB
+      const external = Math.round(processMemory.external / (1024 * 1024)); // MB
+      const nodeVersion = process.version;
+      const processUptime = Math.floor(process.uptime() / 60); // Minutes
+      
+      console.log(`\nNode.js Information:`);
+      console.log(`  Version: ${applyColor(nodeVersion, 'green')}`);
+      console.log(`  Process Uptime: ${applyColor(`${processUptime} minutes`, 'green')}`);
+      console.log(`  Heap Used: ${applyColor(`${heapUsed} MB`, heapUsed > heapTotal * 0.8 ? 'red' : 'green')} / ${heapTotal} MB`);
+      console.log(`  External Memory: ${applyColor(`${external} MB`, 'green')}`);
+      
+      // Storage Information
+      let diskInfo = '';
+      let dittoDirSize = '';
+      try {
+        const stats = fs.statSync('./');
+        const dittoPath = path.join(process.cwd(), 'ditto');
+        
+        // Get available disk space (approximate via fs.statSync)
+        if (fs.existsSync(dittoPath)) {
+          const getDirSize = (dirPath: string): number => {
+            let totalSize = 0;
+            const files = fs.readdirSync(dirPath);
+            for (const file of files) {
+              const filePath = path.join(dirPath, file);
+              const stat = fs.statSync(filePath);
+              if (stat.isDirectory()) {
+                totalSize += getDirSize(filePath);
+              } else {
+                totalSize += stat.size;
+              }
+            }
+            return totalSize;
+          };
+          
+          const size = getDirSize(dittoPath);
+          const sizeMB = Math.round(size / (1024 * 1024));
+          dittoDirSize = `${sizeMB} MB`;
+        } else {
+          dittoDirSize = 'Not found';
+        }
+      } catch (error) {
+        dittoDirSize = 'Unable to calculate';
+      }
+      
+      console.log(`\nStorage Information:`);
+      console.log(`  Working Directory: ${applyColor(process.cwd(), 'green')}`);
+      console.log(`  Ditto Directory: ${applyColor(ditto.absolutePersistenceDirectory, 'green')}`);
+      console.log(`  Ditto Database Size: ${applyColor(dittoDirSize, 'green')}`);
+      
+      // Database Statistics Section
+      console.log(`\n${applyColor('Database Statistics', 'blue')}`);
+      console.log(`${applyColor('─'.repeat(30), 'blue')}`);
+      
       // Get document count
       const countResult = await ditto.store.execute("SELECT COUNT(*) FROM movies");
       
@@ -253,6 +364,48 @@ async function main() {
       } else {
         console.log(`  movies: ${applyColor('Unable to get count', 'red')}`);
       }
+      
+      // Get DQL configuration
+      let dqlStrictMode = 'Unknown';
+      try {
+        const strictModeResult = await ditto.store.execute("SHOW DQL_STRICT_MODE");
+        if (strictModeResult.items.length > 0) {
+          dqlStrictMode = strictModeResult.items[0].value?.dql_strict_mode.toString() || 'Unknown';
+        }
+      } catch (error) {
+        dqlStrictMode = 'Unable to fetch';
+      }
+      
+      // Get document size statistics
+      let avgDocSize = 'Unknown';
+      let minDocSize = 'Unknown';
+      let maxDocSize = 'Unknown';
+      try {
+        // Sample a subset of documents to calculate size statistics
+        const sampleResult = await ditto.store.execute("SELECT * FROM movies LIMIT 100");
+        if (sampleResult.items.length > 0) {
+          const sizes = sampleResult.items.map(item => {
+            const jsonStr = JSON.stringify(item.value);
+            return jsonStr.length;
+          });
+          
+          const totalSize = sizes.reduce((sum, size) => sum + size, 0);
+          avgDocSize = `${Math.round(totalSize / sizes.length)} bytes`;
+          minDocSize = `${Math.min(...sizes)} bytes`;
+          maxDocSize = `${Math.max(...sizes)} bytes`;
+        }
+      } catch (error) {
+        avgDocSize = 'Unable to calculate';
+      }
+      
+      console.log(`\nDatabase Configuration:`);
+      console.log(`  DQL Strict Mode: ${applyColor(dqlStrictMode, dqlStrictMode === 'false' ? 'green' : 'yellow_highlight')}`);
+      console.log(`  Sync Enabled: ${applyColor('false', 'green')} (disabled for benchmarking)`);
+      
+      console.log(`\nDocument Statistics (sample of 100):`);
+      console.log(`  Average Size: ${applyColor(avgDocSize, 'green')}`);
+      console.log(`  Min Size: ${applyColor(minDocSize, 'green')}`);
+      console.log(`  Max Size: ${applyColor(maxDocSize, 'green')}`)
       
       // Get current indexes
       const indexesResult = await ditto.store.execute("SELECT * FROM system:indexes");
@@ -289,7 +442,7 @@ async function main() {
           indexDetails.forEach(detail => console.log(detail));
         }
       }
-      console.log("here")
+
       console.log(`\n${applyColor('═'.repeat(50), 'blue')}\n`);
     } catch (error) {
       console.log(`${applyColor('Failed to get system information:', 'red')} ${error}`);
