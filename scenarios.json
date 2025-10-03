@@ -23,7 +23,8 @@
         {
             "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
             "expectedCount": 711,
-            "expectedIndex": "movies_rated"
+            "expectedIndex": "movies_rated",
+            "maxExecutionTime": 50
         }
     ],
     "index_on_id_subfield": [
@@ -163,7 +164,8 @@
         {
             "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
             "expectedCount": 100,
-            "expectedIndex": "movies_runtime"
+            "expectedIndex": "movies_runtime",
+            "maxExecutionTime": 50
         }
     ]
 }

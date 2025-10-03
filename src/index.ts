@@ -9,6 +9,7 @@ type ScenarioQuery = string | {
   query: string;
   expectedCount?: number;
   expectedIndex?: string | 'full_scan';
+  maxExecutionTime?: number; // in milliseconds
 }
 
 async function importMovies(ditto: Ditto) {
@@ -110,7 +111,7 @@ function extractIndexInfo(explainResult: any): string | null {
 async function main() {
   await init();
 
-  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan') => {
+  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan', maxExecutionTime?: number) => {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
@@ -119,6 +120,7 @@ async function main() {
     
     let countPassed = true;
     let indexPassed = true;
+    let timePassed = true;
     
     // Validate expected count if provided
     if (expectedCount !== undefined) {
@@ -127,6 +129,16 @@ async function main() {
       } else {
         console.log(`Validation: ${applyColor('✗ FAILED', 'red')} - Expected ${expectedCount} documents, got ${result.items.length}`);
         countPassed = false;
+      }
+    }
+    
+    // Validate execution time if provided
+    if (maxExecutionTime !== undefined) {
+      if (elapsed <= maxExecutionTime) {
+        console.log(`Time Validation: ${applyColor('✓ PASSED', 'green')} - Executed in ${elapsed}ms (limit: ${maxExecutionTime}ms)`);
+      } else {
+        console.log(`Time Validation: ${applyColor('✗ FAILED', 'red')} - Executed in ${elapsed}ms, exceeded limit of ${maxExecutionTime}ms`);
+        timePassed = false;
       }
     }
     
@@ -159,7 +171,7 @@ async function main() {
     }
     
     console.log();
-    return { result, countPassed, indexPassed };
+    return { result, countPassed, indexPassed, timePassed };
   }
 
   const ditto = new Ditto({
@@ -192,6 +204,7 @@ async function main() {
       let query: string;
       let expectedCount: number | undefined;
       let expectedIndex: string | 'full_scan' | undefined;
+      let maxExecutionTime: number | undefined;
       
       if (typeof item === 'string') {
         query = item;
@@ -199,17 +212,18 @@ async function main() {
         query = item.query;
         expectedCount = item.expectedCount;
         expectedIndex = item.expectedIndex;
-        if (expectedCount !== undefined || expectedIndex !== undefined) totalTests++;
+        maxExecutionTime = item.maxExecutionTime;
+        if (expectedCount !== undefined || expectedIndex !== undefined || maxExecutionTime !== undefined) totalTests++;
       }
       
       console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
       console.log(`Query: ${applyColor(query, 'green')}`);
       
-      const { countPassed, indexPassed } = await executeDql(query, expectedCount, expectedIndex);
+      const { countPassed, indexPassed, timePassed } = await executeDql(query, expectedCount, expectedIndex, maxExecutionTime);
       
       // Check if tests passed
-      const hasTest = expectedCount !== undefined || expectedIndex !== undefined;
-      const allPassed = countPassed && indexPassed;
+      const hasTest = expectedCount !== undefined || expectedIndex !== undefined || maxExecutionTime !== undefined;
+      const allPassed = countPassed && indexPassed && timePassed;
       
       if (hasTest && allPassed) {
         passedTests++;
@@ -257,9 +271,10 @@ async function main() {
       console.log('  - Enter any valid DQL query to execute');
       console.log('  - Queries starting with EXPLAIN will show execution plan');
       console.log('\nScenario validation:');
-      console.log('  - Scenarios can include expected result counts and/or index usage');
+      console.log('  - Scenarios can include expected result counts, index usage, and execution time');
       console.log('  - expectedCount: validates the number of results returned');
       console.log('  - expectedIndex: automatically runs EXPLAIN and validates index usage');
+      console.log('  - maxExecutionTime: validates query executes within time limit (ms)');
       console.log('  - Use "full_scan" to expect a full table scan');
       console.log('\nExample queries:');
       console.log('  SELECT * FROM movies LIMIT 10');
@@ -378,7 +393,7 @@ async function main() {
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
         }
         else {
-          const { result } = await executeDql(input);
+          await executeDql(input);
         }
       } catch (err) {
         console.error('Error:', err);
