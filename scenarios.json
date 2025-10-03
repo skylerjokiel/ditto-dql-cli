@@ -25,65 +25,98 @@
     ],
     "index_on_id_subfield": [
         "DROP INDEX IF EXISTS movies_year on movies",
-        "SELECT * FROM movies WHERE _id.year = '2001'",
-        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001'",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001'",
+            "expectedCount": 645,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_year on movies (_id.year)",
-        "SELECT * FROM movies WHERE _id.year = '2001'",
-        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001'",
-        "SELECT * FROM movies USE INDEX '_id.year' WHERE _id.year = '2001'",
-        "EXPLAIN SELECT * FROM movies USE INDEX '_id.year' WHERE _id.year = '2001'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001'"
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001'",
+            "expectedCount": 645,
+            "expectedIndex": "movies_year"
+        }
     ],
     "index_on_subfield": [
         "DROP INDEX IF EXISTS award_wins on movies",
-        "SELECT * FROM movies WHERE awards.wins = 1",
-        "EXPLAIN SELECT * FROM movies WHERE awards.wins = 1",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 1",
+            "expectedCount": 5280,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX award_wins on movies (awards.wins)",
-        "SELECT * FROM movies WHERE awards.wins = 1",
-        "EXPLAIN SELECT * FROM movies WHERE awards.wins = 1"
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 1",
+            "expectedCount": 5280,
+            "expectedIndex": "award_wins"
+        }
     ],
-    "index_fields_only_with_or_basic": [
+    "index_or_query_with_override": [
         "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE awards.wins = 3 OR rated = 'APPROVED'"
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "movies_rated"
+        },
+        {
+            "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "full_scan"
+        }
     ],
     "index_id_and_field_with_or_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "movies_rated"
+        },
+        {
+            "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        }
     ],
-    "index_id_and_field_with_or_basic_with_explain": [
+    "index_complex_queries": [
         "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
+            "expectedCount": 0,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
-    ],
-    "index_id_and_field_with_or_advanced": [
-        "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE rated = 'APPROVED' OR _id.year = '2001'",
-        "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
-        "SELECT * FROM movies USE INDEX 'movies_rated' WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
-        "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE rated = 'APPROVED' OR _id.year = '2001'",
-        "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
-        "SELECT * FROM movies USE INDEX 'movies_rated' WHERE _id.year = '2001' OR rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "movies_rated"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
+            "expectedCount": 0,
+            "expectedIndex": "movies_rated"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
+            "expectedCount": 21077,
+            "expectedIndex": "movies_rated"
+        }
     ],
     "index_string_contains": [
         "DROP INDEX IF EXISTS movies_plot_text on movies",
