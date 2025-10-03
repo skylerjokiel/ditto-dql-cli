@@ -14,9 +14,21 @@
     "index_on_id_subfield": [
         "DROP INDEX IF EXISTS movies_year on movies",
         "SELECT * FROM movies WHERE _id.year = '2001'",
+        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001'",
         "CREATE INDEX movies_year on movies (_id.year)",
         "SELECT * FROM movies WHERE _id.year = '2001'",
+        "EXPLAIN SELECT * FROM movies WHERE _id.year = '2001'",
+        "SELECT * FROM movies USE INDEX '_id.year' WHERE _id.year = '2001'",
+        "EXPLAIN SELECT * FROM movies USE INDEX '_id.year' WHERE _id.year = '2001'",
         "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001'"
+    ],
+    "index_on_subfield": [
+        "DROP INDEX IF EXISTS award_wins on movies",
+        "SELECT * FROM movies WHERE awards.wins = 1",
+        "EXPLAIN SELECT * FROM movies WHERE awards.wins = 1",
+        "CREATE INDEX award_wins on movies (awards.wins)",
+        "SELECT * FROM movies WHERE awards.wins = 1",
+        "EXPLAIN SELECT * FROM movies WHERE awards.wins = 1"
     ],
     "index_fields_only_with_or_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",
@@ -25,13 +37,6 @@
         "CREATE INDEX movies_rated on movies (rated)",
         "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
         "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE awards.wins = 3 OR rated = 'APPROVED'"
-    ],
-    "index_id_force_index_basic": [
-        "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
-        "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'"
     ],
     "index_id_and_field_with_or_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",

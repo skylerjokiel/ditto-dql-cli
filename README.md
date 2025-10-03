@@ -36,13 +36,52 @@ The terminal will automatically import the movie dataset on first run.
 SELECT count(*) FROM movies
 
 -- Find movies by year
-SELECT * FROM movies WHERE year = 2020
+SELECT * FROM movies WHERE _id.year = '2001'
 
 -- Search by title
-SELECT * FROM movies WHERE title CONTAINS 'Star'
+SELECT * FROM movies WHERE CONTAINS(_id.title,'Star')
 
--- Filter by rating
-SELECT title, year FROM movies WHERE imdb.rating > 8.0
+```
+
+## Movie Document Structure
+
+Each movie in the database has the following structure:
+
+```json
+{
+  "_id": {
+    "id": "573a1390f29313caabcd4135",
+    "title": "Blacksmith Scene",
+    "year": "1893",
+    "type": "movie"
+  },
+  "plot": "Three men hammer on an anvil...",
+  "genres": ["Short"],
+  "runtime": 1,
+  "cast": ["Charles Kayser", "John Ott"],
+  "fullplot": "A stationary camera looks at...",
+  "countries": ["USA"],
+  "released": "1893-05-09T00:00:00.000Z",
+  "directors": ["William K.L. Dickson"],
+  "rated": "UNRATED",
+  "awards": {
+    "wins": 1,
+    "nominations": 0,
+    "text": "1 win."
+  },
+  "imdb": {
+    "rating": 6.2,
+    "votes": 1189,
+    "id": 5
+  },
+  "tomatoes": {
+    "viewer": {
+      "rating": 3,
+      "numReviews": 184,
+      "meter": 32
+    }
+  }
+}
 ```
 
 ## Available Scenarios
@@ -62,8 +101,7 @@ To add a new scenario, edit `scenarios.json`. Scenarios  and add your queries:
 {
   "my_scenario": [
     "SELECT count(*) FROM movies",
-    "SELECT * FROM movies WHERE year > 2020",
-    "SELECT title, year FROM movies ORDER BY year DESC LIMIT 10"
+    "SELECT * FROM movies WHERE _id.year = '2001'"
   ]
 }
 ```

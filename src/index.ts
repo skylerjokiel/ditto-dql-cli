@@ -1,4 +1,4 @@
-import { init, Ditto, QueryResult, QueryResultItem } from '@dittolive/ditto';
+import { init, Ditto } from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -116,7 +116,7 @@ async function main() {
   });
 
   console.log('Ditto DQL Terminal');
-  console.log('Type "exit" to quit');
+  console.log('Type ".exit" to quit');
   console.log('Type ".import movies" to import movies dataset\n');
 
   rl.prompt();
@@ -124,7 +124,7 @@ async function main() {
   rl.on('line', async (line) => {
     const input = line.trim();
 
-    if (input.toLowerCase() === 'exit') {
+    if (input.toLowerCase() === '.exit') {
       rl.close();
       return;
     }
