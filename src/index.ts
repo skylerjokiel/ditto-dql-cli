@@ -116,8 +116,6 @@ async function main() {
   });
 
   console.log('Ditto DQL Terminal');
-  console.log('Type ".exit" to quit');
-  console.log('Type ".import movies" to import movies dataset\n');
 
   rl.prompt();
 
@@ -129,15 +127,62 @@ async function main() {
       return;
     }
 
+    if (input.toLowerCase() === '.help') {
+      console.log('\nAvailable commands:');
+      console.log('  .help    - Show this help message');
+      console.log('  .list    - List all available scenarios');
+      console.log('  .run <name|index> - Run a scenario by name or index number');
+      console.log('  .exit    - Exit the DQL terminal');
+      console.log('\nDQL queries:');
+      console.log('  - Enter any valid DQL query to execute');
+      console.log('  - Queries starting with EXPLAIN will show execution plan');
+      console.log('\nExample queries:');
+      console.log('  SELECT * FROM movies LIMIT 10');
+      console.log('  SELECT title FROM movies WHERE year > 2020');
+      console.log('  EXPLAIN SELECT * FROM movies WHERE genre = "Action"');
+      console.log();
+      rl.prompt();
+      return;
+    }
+
     if (input) {
       try {
         if (input.toLowerCase() === '.list') {
-          console.log(Object.keys(scenarios));
+          const scenarioKeys = Object.keys(scenarios);
+          console.log('\nAvailable scenarios:');
+          scenarioKeys.forEach((key, index) => {
+            console.log(`  ${index + 1}. ${key}`);
+          });
+          console.log();
         }
         else if (input.toLowerCase().startsWith('.run')) {
-          const scenarioName = input.split(' ')[1];
+          const arg = input.split(' ')[1];
+          if (!arg) {
+            console.log('Please provide a scenario name or index number');
+            rl.prompt();
+            return;
+          }
+          
+          const scenarioKeys = Object.keys(scenarios);
+          let scenarioName: string;
+          
+          // Check if arg is a number (index)
+          const index = parseInt(arg);
+          if (!isNaN(index) && index > 0 && index <= scenarioKeys.length) {
+            scenarioName = scenarioKeys[index - 1];
+          } else {
+            scenarioName = arg;
+          }
+          
           const scenario = scenarios[scenarioName as keyof typeof scenarios];
           
+          if (!scenario) {
+            console.log(`Scenario '${arg}' not found. Use .list to see available scenarios.`);
+            rl.prompt();
+            return;
+          }
+          
+          console.log(`\nRunning scenario: ${scenarioName}`);
           for (let index = 0; index < scenario.length; index++) {
             const query = scenario[index];
             console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));

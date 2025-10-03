@@ -25,8 +25,9 @@ The terminal will automatically import the movie dataset on first run.
 ### Terminal Commands
 
 - **DQL Query** - Type any DQL query directly and press Enter
-- `.list` - Show all available scenarios
-- `.run <scenario>` - Run a predefined scenario (e.g., `.run count_all`)
+- `.help` - Show help message with all available commands
+- `.list` - Show all available scenarios with index numbers
+- `.run <name|index>` - Run a predefined scenario by name or index number (e.g., `.run count_all` or `.run 1`)
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -86,10 +87,12 @@ Each movie in the database has the following structure:
 
 ## Available Scenarios
 
-Run `.list` to see all scenarios. Some examples:
-- `count_all` - Simple count query
-- `index_basic` - Index performance demo
-- `index_on_id_subfield` - Indexing on ID subfields
+Run `.list` to see all scenarios with their index numbers. You can run scenarios either by name or index:
+- `.run count_all` or `.run 1` - Simple count query
+- `.run index_basic` or `.run 2` - Index performance demo
+- `.run index_on_id_subfield` or `.run 3` - Indexing on ID subfields
+
+The actual index numbers will depend on the order of scenarios in your `scenarios.json` file.
 
 ## Adding New Scenarios
 
