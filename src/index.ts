@@ -601,7 +601,7 @@ async function main() {
           const benchmarkKeys = Object.keys(benchmarks);
           console.log('\nAvailable benchmarks:');
           benchmarkKeys.forEach((key, index) => {
-            const benchmark = benchmarks[key as keyof typeof benchmarks];
+            const benchmark = benchmarks[key as keyof typeof benchmarks] as Benchmark;
             console.log(`  ${index + 1}. ${applyColor(key, 'green')} - ${benchmark.query}`);
           });
           console.log();
@@ -625,7 +625,7 @@ async function main() {
             benchmarkName = arg;
           }
           
-          const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks];
+          const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
           
           if (!benchmark) {
             console.log(`Benchmark '${arg}' not found. Use .benchmarks to see available benchmarks.`);
@@ -663,7 +663,7 @@ async function main() {
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
           
           for (const benchmarkName of benchmarkKeys) {
-            const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks];
+            const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             console.log(`${applyColor(`Running benchmark: ${benchmarkName}`, 'blue')}`);
             
             // Run pre-queries if they exist
