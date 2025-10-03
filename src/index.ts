@@ -250,6 +250,7 @@ async function main() {
           const scenarioKeys = Object.keys(scenarios);
           let totalPassed = 0;
           let totalTestCount = 0;
+          const scenarioResults: { name: string; passed: number; total: number; status: 'pass' | 'fail' | 'no-tests' }[] = [];
           
           console.log(`\n${applyColor('Running all scenarios...', 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
@@ -259,20 +260,45 @@ async function main() {
             const { passedTests, totalTests } = await runScenario(scenarioName, scenario as ScenarioQuery[]);
             totalPassed += passedTests;
             totalTestCount += totalTests;
+            
+            let status: 'pass' | 'fail' | 'no-tests';
+            if (totalTests === 0) {
+              status = 'no-tests';
+            } else if (passedTests === totalTests) {
+              status = 'pass';
+            } else {
+              status = 'fail';
+            }
+            
+            scenarioResults.push({ name: scenarioName, passed: passedTests, total: totalTests, status });
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
-          console.log(applyColor('ALL SCENARIOS COMPLETE', 'blue'));
+          console.log(applyColor('TEST SUMMARY', 'blue'));
+          console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
           
+          // Scenario summary
+          console.log('Scenario Results:');
+          for (const result of scenarioResults) {
+            const statusIcon = result.status === 'pass' ? '✓' : result.status === 'fail' ? '✗' : '-';
+            const statusColor = result.status === 'pass' ? 'green' : result.status === 'fail' ? 'red' : 'blue';
+            const testInfo = result.total > 0 ? ` (${result.passed}/${result.total} tests)` : ' (no validation tests)';
+            console.log(`  ${applyColor(statusIcon, statusColor)} ${result.name}${testInfo}`);
+          }
+          
+          // Overall summary
+          console.log(`\n${applyColor('─'.repeat(50), 'blue')}`);
           if (totalTestCount > 0) {
-            console.log(`\nOverall Test Results: ${totalPassed}/${totalTestCount} tests passed`);
+            console.log(`\nOverall: ${totalPassed}/${totalTestCount} tests passed`);
             const passRate = Math.round((totalPassed / totalTestCount) * 100);
             if (totalPassed === totalTestCount) {
-              console.log(applyColor(`Perfect! All tests passed (100%) ✓`, 'green'));
+              console.log(applyColor(`Result: PASS (100%) ✓`, 'green'));
             } else {
-              console.log(applyColor(`Pass rate: ${passRate}% - ${totalTestCount - totalPassed} tests failed ✗`, 'red'));
+              console.log(applyColor(`Result: FAIL (${passRate}%) ✗`, 'red'));
             }
+          } else {
+            console.log('\nNo validation tests were run.');
           }
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
         }
