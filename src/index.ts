@@ -13,6 +13,12 @@ type ScenarioQuery = string | {
   maxExecutionTime?: number; // in milliseconds
 }
 
+type Benchmark = {
+  query: string;
+  preQueries?: string[];
+  postQueries?: string[];
+}
+
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
   const filePath = path.join(process.cwd(), docName);
@@ -559,8 +565,27 @@ async function main() {
           }
           
           console.log(`\nRunning benchmark: ${benchmarkName}`);
+          
+          // Run pre-queries if they exist
+          if (benchmark.preQueries && benchmark.preQueries.length > 0) {
+            console.log(`${applyColor('Running setup queries...', 'blue')}`);
+            for (const preQuery of benchmark.preQueries) {
+              console.log(`  Setup: ${preQuery}`);
+              await ditto.store.execute(preQuery);
+            }
+          }
+          
           console.log(`Query: ${benchmark.query}`);
           await benchmarkQuery(benchmark.query, 20);
+          
+          // Run post-queries if they exist
+          if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+            console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
+            for (const postQuery of benchmark.postQueries) {
+              console.log(`  Cleanup: ${postQuery}`);
+              await ditto.store.execute(postQuery);
+            }
+          }
         }
         else if (input.toLowerCase() === '.benchmark_all') {
           const benchmarkKeys = Object.keys(benchmarks);
@@ -571,7 +596,28 @@ async function main() {
           for (const benchmarkName of benchmarkKeys) {
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks];
             console.log(`${applyColor(`Running benchmark: ${benchmarkName}`, 'blue')}`);
+            
+            // Run pre-queries if they exist
+            if (benchmark.preQueries && benchmark.preQueries.length > 0) {
+              console.log(`${applyColor('Running setup queries...', 'blue')}`);
+              for (const preQuery of benchmark.preQueries) {
+                console.log(`  Setup: ${preQuery}`);
+                await ditto.store.execute(preQuery);
+              }
+            }
+            
+            console.log(`Query: ${benchmark.query}`);
             await benchmarkQuery(benchmark.query, 20);
+            
+            // Run post-queries if they exist
+            if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+              console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
+              for (const postQuery of benchmark.postQueries) {
+                console.log(`  Cleanup: ${postQuery}`);
+                await ditto.store.execute(postQuery);
+              }
+            }
+            
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           

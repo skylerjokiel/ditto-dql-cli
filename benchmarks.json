@@ -5,16 +5,39 @@
     "basic_select": {
         "query": "SELECT * FROM movies LIMIT 100"
     },
-    "filtered_query": {
-        "query": "SELECT * FROM movies WHERE rated = 'PG' LIMIT 50"
+    "filtered_query_no_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG'"
+    },
+    "filtered_query_with_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies",
+            "CREATE INDEX movies_rated ON movies (rated)"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies"
+        ]
     },
     "text_search": {
-        "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love') LIMIT 20"
+        "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love')"
     },
-    "year_filter": {
-        "query": "SELECT * FROM movies WHERE _id.year > '2000' LIMIT 50"
+    "year_filter_no_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies"
+        ],
+        "query": "SELECT * FROM movies WHERE _id.year > '2000'"
     },
-    "runtime_filter": {
-        "query": "SELECT * FROM movies WHERE runtime > 120 LIMIT 50"
+    "year_filter_with_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies",
+            "CREATE INDEX movies_year ON movies (_id.year)"
+        ],
+        "query": "SELECT * FROM movies WHERE _id.year > '2000'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies"
+        ]
     }
 }
