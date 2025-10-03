@@ -111,7 +111,7 @@ function extractIndexInfo(explainResult: any): string | null {
 async function main() {
   await init();
 
-  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan', maxExecutionTime?: number) => {
+  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan', maxExecutionTime?: number, interactive: boolean = false, rl?: readline.Interface) => {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
@@ -168,6 +168,22 @@ async function main() {
     if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
       console.log();
       console.log(JSON.stringify(result.items[0].value, null, 2));
+    }
+    
+    // Interactive prompt for raw DQL commands
+    if (interactive && result.items.length > 0 && !qLower.startsWith('explain') && !qLower.startsWith('profile') && rl) {
+      const answer = await new Promise<string>((resolve) => {
+        rl.question('Print results? (y/n, default: n): ', (answer) => {
+          resolve(answer.toLowerCase().trim());
+        });
+      });
+      
+      if (answer === 'y' || answer === 'yes') {
+        console.log('\nResults:');
+        result.items.forEach((item, index) => {
+          console.log(`${index + 1}. ${JSON.stringify(item.value, null, 2)}`);
+        });
+      }
     }
     
     console.log();
@@ -478,7 +494,7 @@ async function main() {
           await benchmarkQuery(query, 100);
         }
         else {
-          await executeDql(input);
+          await executeDql(input, undefined, undefined, undefined, true, rl);
         }
       } catch (err) {
         console.error('Error:', err);
