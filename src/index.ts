@@ -8,6 +8,7 @@ import scenarios from "../scenarios.json"
 type ScenarioQuery = string | {
   query: string;
   expectedCount?: number;
+  expectedIndex?: string | 'full_scan';
 }
 
 async function importMovies(ditto: Ditto) {
@@ -78,15 +79,46 @@ async function importMovies(ditto: Ditto) {
   }
 }
 
+function extractIndexInfo(explainResult: any): string | null {
+  try {
+    const plan = explainResult?.plan;
+    if (!plan) return null;
+    
+    // Check for full scan
+    if (plan['#operator'] === 'scan' || 
+        (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'scan'))) {
+      // Look for full_scan in descriptor
+      const scanOp = plan['#operator'] === 'scan' ? plan : plan.children.find((child: any) => child['#operator'] === 'scan');
+      if (scanOp?.descriptor?.path?._id === 'query_details' && scanOp?.descriptor?.path?.full_scan !== undefined) {
+        return 'full_scan';
+      }
+    }
+    
+    // Check for index scan
+    if (plan['#operator'] === 'index_scan' || 
+        (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'index_scan'))) {
+      const indexOp = plan['#operator'] === 'index_scan' ? plan : plan.children.find((child: any) => child['#operator'] === 'index_scan');
+      return indexOp?.desc?.index || null;
+    }
+    
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   await init();
 
-  const executeDql = async (query:string, expectedCount?: number) => {
+  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan') => {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
     console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
     console.log(`Result Count: ${result.items.length}`);
+    
+    let countPassed = true;
+    let indexPassed = true;
     
     // Validate expected count if provided
     if (expectedCount !== undefined) {
@@ -94,17 +126,38 @@ async function main() {
         console.log(`Validation: ${applyColor('✓ PASSED', 'green')} - Expected ${expectedCount} documents`);
       } else {
         console.log(`Validation: ${applyColor('✗ FAILED', 'red')} - Expected ${expectedCount} documents, got ${result.items.length}`);
+        countPassed = false;
       }
     }
-    console.log();
     
-    // If it's an explain or profile we'll log it.
+    // If expectedIndex is provided and this isn't already an EXPLAIN query, run EXPLAIN version
     const qLower = query.toLowerCase();
-    if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
-      console.log(JSON.stringify(result.items[0].value,null, 2));
+    if (expectedIndex !== undefined && !qLower.startsWith('explain') && !qLower.startsWith('profile')) {
+      const explainQuery = `EXPLAIN ${query}`;
+      const explainResult = await ditto.store.execute(explainQuery);
+      
+      if (explainResult.items.length > 0 && explainResult.items[0].value) {
+        const indexUsed = extractIndexInfo(explainResult.items[0].value);
+        
+        if (indexUsed === expectedIndex) {
+          console.log(`Index Validation: ${applyColor('✓ PASSED', 'green')} - Using ${expectedIndex === 'full_scan' ? 'full scan' : `index '${expectedIndex}'`}`);
+        } else {
+          const actualDesc = indexUsed === 'full_scan' ? 'full scan' : indexUsed ? `index '${indexUsed}'` : 'unknown scan type';
+          const expectedDesc = expectedIndex === 'full_scan' ? 'full scan' : `index '${expectedIndex}'`;
+          console.log(`Index Validation: ${applyColor('✗ FAILED', 'red')} - Expected ${expectedDesc}, but using ${actualDesc}`);
+          indexPassed = false;
+        }
+      }
     }
     
-    return result;
+    // Handle regular EXPLAIN or PROFILE queries
+    if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
+      console.log();
+      console.log(JSON.stringify(result.items[0].value, null, 2));
+    }
+    
+    console.log();
+    return { result, countPassed, indexPassed };
   }
 
   const ditto = new Ditto({
@@ -136,21 +189,27 @@ async function main() {
       const item = scenario[index];
       let query: string;
       let expectedCount: number | undefined;
+      let expectedIndex: string | 'full_scan' | undefined;
       
       if (typeof item === 'string') {
         query = item;
       } else {
         query = item.query;
         expectedCount = item.expectedCount;
-        if (expectedCount !== undefined) totalTests++;
+        expectedIndex = item.expectedIndex;
+        if (expectedCount !== undefined || expectedIndex !== undefined) totalTests++;
       }
       
       console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
       console.log(`Query: ${applyColor(query, 'green')}`);
       
-      const result = await executeDql(query, expectedCount);
+      const { countPassed, indexPassed } = await executeDql(query, expectedCount, expectedIndex);
       
-      if (expectedCount !== undefined && result.items.length === expectedCount) {
+      // Check if tests passed
+      const hasTest = expectedCount !== undefined || expectedIndex !== undefined;
+      const allPassed = countPassed && indexPassed;
+      
+      if (hasTest && allPassed) {
         passedTests++;
       }
     }
@@ -196,8 +255,10 @@ async function main() {
       console.log('  - Enter any valid DQL query to execute');
       console.log('  - Queries starting with EXPLAIN will show execution plan');
       console.log('\nScenario validation:');
-      console.log('  - Scenarios can now include expected result counts');
-      console.log('  - Queries with expectedCount will be validated automatically');
+      console.log('  - Scenarios can include expected result counts and/or index usage');
+      console.log('  - expectedCount: validates the number of results returned');
+      console.log('  - expectedIndex: automatically runs EXPLAIN and validates index usage');
+      console.log('  - Use "full_scan" to expect a full table scan');
       console.log('\nExample queries:');
       console.log('  SELECT * FROM movies LIMIT 10');
       console.log('  SELECT title FROM movies WHERE year > 2020');
@@ -303,7 +364,7 @@ async function main() {
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
         }
         else {
-          await executeDql(input);
+          const { result } = await executeDql(input);
         }
       } catch (err) {
         console.error('Error:', err);

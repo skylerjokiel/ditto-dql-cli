@@ -11,12 +11,17 @@
     ],
     "index_basic": [
         "DROP INDEX IF EXISTS movies_rated on movies",
-        "SELECT * FROM movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_rated on movies (rated)",
-        "SELECT * FROM movies",
-        "SELECT * FROM movies WHERE rated = 'APPROVED'",
-        "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE rated = 'APPROVED'"
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "movies_rated"
+        }
     ],
     "index_on_id_subfield": [
         "DROP INDEX IF EXISTS movies_year on movies",
@@ -82,11 +87,15 @@
     ],
     "index_string_contains": [
         "DROP INDEX IF EXISTS movies_plot_text on movies",
-        "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
-        "EXPLAIN SELECT plot FROM movies WHERE CONTAINS(plot, 'love')",
+        {
+            "query": "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+            "expectedIndex": "full_scan"
+        },
         "CREATE INDEX movies_plot_text on movies (plot)",
-        "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
-        "EXPLAIN SELECT plot FROM movies WHERE CONTAINS(plot, 'love')"
+        {
+            "query": "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+            "expectedIndex": "movies_plot_text"
+        }
     ],
     "validation_test": [
         {
@@ -105,6 +114,20 @@
         {
             "query": "SELECT * FROM movies WHERE awards.wins > 10",
             "expectedCount": 2107
+        }
+    ],
+    "index_and_count_validation": [
+        "DROP INDEX IF EXISTS movies_runtime on movies",
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
+            "expectedCount": 100,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_runtime on movies (runtime)",
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
+            "expectedCount": 100,
+            "expectedIndex": "movies_runtime"
         }
     ]
 }
