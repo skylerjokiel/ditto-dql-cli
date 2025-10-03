@@ -209,7 +209,18 @@ async function main() {
   ditto.updateTransportConfig((config) => {
     config.connect.websocketURLs.push('wss://i83inp.cloud.dittolive.app');
   });
+
+  // Uses the new DQL Document Schema mode where type definitions are not required 
   await ditto.store.execute("ALTER SYSTEM SET DQL_STRICT_MODE = false");
+
+  // Restrict `movies` collection to be local only 
+  const syncScopes = {
+    movies: "LocalPeerOnly"
+  };
+  await ditto.store.execute(
+    "ALTER SYSTEM SET USER_COLLECTION_SYNC_SCOPES = :syncScopes",
+    { syncScopes }
+  );
 
   const checkStoreResponse = await ditto.store.execute("SELECT * FROM movies LIMIT 1");
   if (checkStoreResponse.items.length === 0) {
