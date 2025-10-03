@@ -3,6 +3,7 @@ import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 
 import scenarios from "../scenarios.json"
 import benchmarks from "../benchmarks.json"
@@ -18,6 +19,71 @@ type Benchmark = {
   query: string;
   preQueries?: string[];
   postQueries?: string[];
+}
+
+type BenchmarkBaseline = {
+  _id: {
+    query: string;
+    hash: string;
+    ditto_version: string;
+  };
+  metrics: {
+    mean: number;
+    median: number;
+    min: number;
+    max: number;
+    stdDev: number;
+    p95: number;
+    p99: number;
+    resultCount: number;
+    runs: number;
+    timestamp: string;
+  };
+}
+
+function generateBenchmarkHash(preQueries: string[] = [], query: string): string {
+  const combined = [...preQueries, query].join('|');
+  return crypto.createHash('sha256').update(combined).digest('hex').substring(0, 16);
+}
+
+async function getDittoVersion(): Promise<string> {
+  try {
+    const dittoPackagePath = path.join(process.cwd(), 'node_modules', '@dittolive', 'ditto', 'package.json');
+    if (fs.existsSync(dittoPackagePath)) {
+      const packageJson = JSON.parse(fs.readFileSync(dittoPackagePath, 'utf8'));
+      return packageJson.version;
+    }
+  } catch (error) {
+    console.error('Could not read Ditto version:', error);
+  }
+  return 'unknown';
+}
+
+async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Promise<BenchmarkBaseline | null> {
+  try {
+    const result = await ditto.store.execute(
+      "SELECT * FROM benchmark_baselines WHERE _id.hash = :hash AND _id.ditto_version = :version",
+      { hash, version: dittoVersion }
+    );
+    
+    if (result.items.length > 0) {
+      return result.items[0].value as BenchmarkBaseline;
+    }
+  } catch (error) {
+    // Collection might not exist yet, that's ok
+  }
+  return null;
+}
+
+async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<void> {
+  try {
+    await ditto.store.execute(
+      "INSERT INTO benchmark_baselines DOCUMENTS (:baseline) ON ID CONFLICT DO UPDATE",
+      { baseline }
+    );
+  } catch (error) {
+    console.error('Failed to save baseline:', error);
+  }
 }
 
 async function importMovies(ditto: Ditto) {
@@ -484,7 +550,7 @@ async function main() {
     }
   };
 
-  const benchmarkQuery = async (query: string, count: number = 20) => {
+  const benchmarkQuery = async (query: string, count: number = 20, preQueries: string[] = [], compareBaseline: boolean = true) => {
     console.log(`\n${applyColor('Benchmarking Query', 'blue')}`);
     console.log(`Query: ${applyColor(query, 'green')}`);
     console.log(`Runs: ${count}`);
@@ -511,7 +577,9 @@ async function main() {
         }
       } catch (error) {
         console.error(`Error on run ${i + 1}:`, error);
-        return;
+        return {
+          mean: 0, median: 0, min: 0, max: 0, stdDev: 0, p95: 0, p99: 0, resultCount: 0, times: []
+        };
       }
     }
     
@@ -546,7 +614,42 @@ async function main() {
     console.log(`\nThroughput:`);
     console.log(`  Queries/sec: ${(1000 / mean).toFixed(2)}`);
     console.log(`  Total time:  ${(sum / 1000).toFixed(2)}s`);
+    
+    // Compare with baseline if requested
+    if (compareBaseline) {
+      const hash = generateBenchmarkHash(preQueries, query);
+      const dittoVersion = await getDittoVersion();
+      const baseline = await getBaseline(ditto, hash, dittoVersion);
+      
+      if (baseline) {
+        console.log(`\n${applyColor('Baseline Comparison', 'blue')}`);
+        console.log(`${applyColor('─'.repeat(30), 'blue')}`);
+        
+        const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
+        const medianDiff = ((median - baseline.metrics.median) / baseline.metrics.median) * 100;
+        const p95Diff = ((p95 - baseline.metrics.p95) / baseline.metrics.p95) * 100;
+        
+        const formatDiff = (diff: number) => {
+          const sign = diff >= 0 ? '+' : '';
+          const color = Math.abs(diff) < 5 ? 'green' : Math.abs(diff) < 15 ? 'yellow_highlight' : 'red';
+          return applyColor(`${sign}${diff.toFixed(1)}%`, color);
+        };
+        
+        console.log(`  Baseline from: ${baseline.metrics.timestamp}`);
+        console.log(`  Mean:     ${mean.toFixed(2)}ms vs ${baseline.metrics.mean.toFixed(2)}ms (${formatDiff(meanDiff)})`);
+        console.log(`  Median:   ${median.toFixed(2)}ms vs ${baseline.metrics.median.toFixed(2)}ms (${formatDiff(medianDiff)})`);
+        console.log(`  95th %:   ${p95}ms vs ${baseline.metrics.p95}ms (${formatDiff(p95Diff)})`);
+      } else {
+        console.log(`\n${applyColor('No baseline found for this query/version combination', 'yellow_highlight')}`);
+        console.log(`Hash: ${hash}, Version: ${dittoVersion}`);
+      }
+    }
+    
     console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
+    
+    return {
+      mean, median, min, max, stdDev, p95, p99, resultCount, times
+    };
   };
 
   const runScenario = async (scenarioName: string, scenario: ScenarioQuery[]) => {
@@ -629,6 +732,7 @@ async function main() {
       console.log('  .benchmarks - List all available benchmarks');
       console.log('  .benchmark <name|index> - Run a specific benchmark');
       console.log('  .benchmark_all - Run all benchmarks');
+      console.log('  .benchmark_baseline - Create baselines for all benchmarks');
       console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
@@ -809,7 +913,7 @@ async function main() {
           }
           
           console.log(`Query: ${benchmark.query}`);
-          await benchmarkQuery(benchmark.query, 20);
+          await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || []);
           
           // Run post-queries if they exist
           if (benchmark.postQueries && benchmark.postQueries.length > 0) {
@@ -840,7 +944,7 @@ async function main() {
             }
             
             console.log(`Query: ${benchmark.query}`);
-            await benchmarkQuery(benchmark.query, 20);
+            await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || []);
             
             // Run post-queries if they exist
             if (benchmark.postQueries && benchmark.postQueries.length > 0) {
@@ -855,6 +959,71 @@ async function main() {
           }
           
           console.log(`${applyColor('All benchmarks complete!', 'green')}`);
+        }
+        else if (input.toLowerCase() === '.benchmark_baseline') {
+          const benchmarkKeys = Object.keys(benchmarks);
+          const dittoVersion = await getDittoVersion();
+          
+          console.log(`\n${applyColor('Creating Baselines for All Benchmarks', 'blue')}`);
+          console.log(`${applyColor('━'.repeat(50), 'blue')}`);
+          console.log(`Ditto Version: ${dittoVersion}\n`);
+          
+          for (const benchmarkName of benchmarkKeys) {
+            const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
+            const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
+            
+            console.log(`${applyColor(`Creating baseline: ${benchmarkName}`, 'blue')}`);
+            console.log(`Hash: ${hash}`);
+            
+            // Run pre-queries if they exist
+            if (benchmark.preQueries && benchmark.preQueries.length > 0) {
+              console.log(`${applyColor('Running setup queries...', 'blue')}`);
+              for (const preQuery of benchmark.preQueries) {
+                console.log(`  Setup: ${preQuery}`);
+                await ditto.store.execute(preQuery);
+              }
+            }
+            
+            console.log(`Query: ${benchmark.query}`);
+            const results = await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || [], false);
+            
+            // Create baseline document
+            const baseline: BenchmarkBaseline = {
+              _id: {
+                query: benchmark.query,
+                hash: hash,
+                ditto_version: dittoVersion
+              },
+              metrics: {
+                mean: results.mean,
+                median: results.median,
+                min: results.min,
+                max: results.max,
+                stdDev: results.stdDev,
+                p95: results.p95,
+                p99: results.p99,
+                resultCount: results.resultCount,
+                runs: 20,
+                timestamp: new Date().toISOString()
+              }
+            };
+            
+            await saveBaseline(ditto, baseline);
+            console.log(`${applyColor('✓ Baseline saved', 'green')}`);
+            
+            // Run post-queries if they exist
+            if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+              console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
+              for (const postQuery of benchmark.postQueries) {
+                console.log(`  Cleanup: ${postQuery}`);
+                await ditto.store.execute(postQuery);
+              }
+            }
+            
+            console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
+          }
+          
+          console.log(`${applyColor('All baselines created successfully!', 'green')}`);
         }
         else if (input.toLowerCase().startsWith('.bench')) {
           const queryStart = input.indexOf(' ') + 1;
@@ -873,7 +1042,7 @@ async function main() {
             query = query.slice(1, -1);
           }
           
-          await benchmarkQuery(query, 20);
+          await benchmarkQuery(query, 20, [], false); // Don't compare baseline for ad-hoc queries
         }
         else if (input.toLowerCase() === '.system') {
           await showSystemInfo();
