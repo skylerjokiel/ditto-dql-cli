@@ -127,6 +127,46 @@ async function main() {
     await importMovies(ditto);
   }
 
+  const runScenario = async (scenarioName: string, scenario: ScenarioQuery[]) => {
+    console.log(`\nRunning scenario: ${scenarioName}`);
+    let passedTests = 0;
+    let totalTests = 0;
+    
+    for (let index = 0; index < scenario.length; index++) {
+      const item = scenario[index];
+      let query: string;
+      let expectedCount: number | undefined;
+      
+      if (typeof item === 'string') {
+        query = item;
+      } else {
+        query = item.query;
+        expectedCount = item.expectedCount;
+        if (expectedCount !== undefined) totalTests++;
+      }
+      
+      console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
+      console.log(`Query: ${applyColor(query, 'green')}`);
+      
+      const result = await executeDql(query, expectedCount);
+      
+      if (expectedCount !== undefined && result.items.length === expectedCount) {
+        passedTests++;
+      }
+    }
+    
+    if (totalTests > 0) {
+      console.log(`\nScenario Summary: ${passedTests}/${totalTests} tests passed`);
+      if (passedTests === totalTests) {
+        console.log(applyColor('All tests passed! ✓', 'green'));
+      } else {
+        console.log(applyColor(`${totalTests - passedTests} tests failed ✗`, 'red'));
+      }
+    }
+    
+    return { passedTests, totalTests };
+  };
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -150,6 +190,7 @@ async function main() {
       console.log('  .help    - Show this help message');
       console.log('  .list    - List all available scenarios');
       console.log('  .run <name|index> - Run a scenario by name or index number');
+      console.log('  .all     - Run all scenarios in sequence');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -203,41 +244,37 @@ async function main() {
             return;
           }
           
-          console.log(`\nRunning scenario: ${scenarioName}`);
-          let passedTests = 0;
-          let totalTests = 0;
+          await runScenario(scenarioName, scenario as ScenarioQuery[]);
+        }
+        else if (input.toLowerCase() === '.all') {
+          const scenarioKeys = Object.keys(scenarios);
+          let totalPassed = 0;
+          let totalTestCount = 0;
           
-          for (let index = 0; index < scenario.length; index++) {
-            const item = scenario[index] as ScenarioQuery;
-            let query: string;
-            let expectedCount: number | undefined;
-            
-            if (typeof item === 'string') {
-              query = item;
-            } else {
-              query = item.query;
-              expectedCount = item.expectedCount;
-              if (expectedCount !== undefined) totalTests++;
-            }
-            
-            console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
-            console.log(`Query: ${applyColor(query, 'green')}`);
-            
-            const result = await executeDql(query, expectedCount);
-            
-            if (expectedCount !== undefined && result.items.length === expectedCount) {
-              passedTests++;
-            }
+          console.log(`\n${applyColor('Running all scenarios...', 'blue')}`);
+          console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
+          
+          for (const scenarioName of scenarioKeys) {
+            const scenario = scenarios[scenarioName as keyof typeof scenarios];
+            const { passedTests, totalTests } = await runScenario(scenarioName, scenario as ScenarioQuery[]);
+            totalPassed += passedTests;
+            totalTestCount += totalTests;
+            console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           
-          if (totalTests > 0) {
-            console.log(`\nScenario Summary: ${passedTests}/${totalTests} tests passed`);
-            if (passedTests === totalTests) {
-              console.log(applyColor('All tests passed! ✓', 'green'));
+          console.log(`${applyColor('═'.repeat(50), 'blue')}`);
+          console.log(applyColor('ALL SCENARIOS COMPLETE', 'blue'));
+          
+          if (totalTestCount > 0) {
+            console.log(`\nOverall Test Results: ${totalPassed}/${totalTestCount} tests passed`);
+            const passRate = Math.round((totalPassed / totalTestCount) * 100);
+            if (totalPassed === totalTestCount) {
+              console.log(applyColor(`Perfect! All tests passed (100%) ✓`, 'green'));
             } else {
-              console.log(applyColor(`${totalTests - passedTests} tests failed ✗`, 'red'));
+              console.log(applyColor(`Pass rate: ${passRate}% - ${totalTestCount - totalPassed} tests failed ✗`, 'red'));
             }
           }
+          console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
         }
         else {
           await executeDql(input);

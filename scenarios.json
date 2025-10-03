@@ -95,16 +95,16 @@
         },
         {
             "query": "SELECT * FROM movies WHERE _id.year = '1999'",
-            "expectedCount": 93
+            "expectedCount": 542
         },
         {
             "query": "SELECT * FROM movies WHERE runtime < 10",
-            "expectedCount": 146
+            "expectedCount": 151
         },
         "SELECT * FROM movies WHERE rated = 'G'",
         {
             "query": "SELECT * FROM movies WHERE awards.wins > 10",
-            "expectedCount": 146
+            "expectedCount": 2107
         }
     ]
 }
