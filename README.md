@@ -87,26 +87,88 @@ Each movie in the database has the following structure:
 }
 ```
 
-## Available Scenarios
+## Test Harness & Validation
 
-Run `.list` to see all scenarios with their index numbers. You can run scenarios either by name or index:
-- `.run count_all` or `.run 1` - Simple count query
-- `.run index_basic` or `.run 2` - Index performance demo
-- `.run index_on_id_subfield` or `.run 3` - Indexing on ID subfields
+This application functions as a comprehensive test harness for DQL queries with built-in validation:
 
-The actual index numbers will depend on the order of scenarios in your `scenarios.json` file.
+### Scenario Validation
 
-## Adding New Scenarios
+Scenarios can include automated validation for:
+- **Result Count**: Verify queries return the expected number of documents
+- **Index Usage**: Automatically run EXPLAIN and validate which index is used
+- **Execution Time**: Ensure queries complete within specified time limits
 
-Scenarios are a list of dql commands executed in sequential order.
+### Scenario Format
 
-To add a new scenario, edit `scenarios.json`. Scenarios  and add your queries:
+Scenarios support both simple strings and validation objects:
 
 ```json
 {
   "my_scenario": [
-    "SELECT count(*) FROM movies",
-    "SELECT * FROM movies WHERE _id.year = '2001'"
+    "DROP INDEX IF EXISTS my_index ON movies",
+    {
+      "query": "SELECT * FROM movies WHERE rated = 'PG'",
+      "expectedCount": 1234,
+      "expectedIndex": "full_scan",
+      "maxExecutionTime": 500
+    },
+    "CREATE INDEX my_index ON movies (rated)",
+    {
+      "query": "SELECT * FROM movies WHERE rated = 'PG'", 
+      "expectedCount": 1234,
+      "expectedIndex": "my_index",
+      "maxExecutionTime": 50
+    }
+  ]
+}
+```
+
+### Available Scenarios
+
+Run `.list` to see all scenarios with their index numbers. You can run scenarios either by name or index:
+- `.run index_basic` or `.run 1` - Basic index performance validation
+- `.run index_string_contains` or `.run 2` - Text search with CONTAINS
+- `.run validation_test` or `.run 3` - Result count validation examples
+
+Use `.all` to run all scenarios and get a comprehensive test report.
+
+## Performance Benchmarking
+
+Use the `.bench` command to get detailed performance statistics:
+
+```
+.bench SELECT * FROM movies WHERE rated = 'APPROVED'
+```
+
+This will run the query 100 times and provide:
+- Mean, median, min, max execution times
+- Standard deviation and percentiles (95th, 99th)
+- Queries per second throughput
+- Progress tracking during execution
+
+Perfect for comparing indexed vs non-indexed query performance!
+
+## Adding New Scenarios
+
+To add a new scenario, edit `scenarios.json` and add your queries with optional validation:
+
+```json
+{
+  "my_scenario": [
+    "DROP INDEX IF EXISTS my_index ON movies",
+    {
+      "query": "SELECT * FROM movies WHERE runtime > 120",
+      "expectedCount": 8500,
+      "expectedIndex": "full_scan",
+      "maxExecutionTime": 800
+    },
+    "CREATE INDEX my_index ON movies (runtime)",
+    {
+      "query": "SELECT * FROM movies WHERE runtime > 120",
+      "expectedCount": 8500,
+      "expectedIndex": "my_index", 
+      "maxExecutionTime": 100
+    }
   ]
 }
 ```
