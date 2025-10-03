@@ -73,5 +73,13 @@
         "SELECT * FROM movies USE INDEX 'movies_rated' WHERE _id.year = '2001' OR rated = 'APPROVED'",
         "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
         "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'"
+    ],
+    "index_string_contains": [
+        "DROP INDEX IF EXISTS movies_plot_text on movies",
+        "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+        "EXPLAIN SELECT plot FROM movies WHERE CONTAINS(plot, 'love')",
+        "CREATE INDEX movies_plot_text on movies (plot)",
+        "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+        "EXPLAIN SELECT plot FROM movies WHERE CONTAINS(plot, 'love')"
     ]
 }
