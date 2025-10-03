@@ -59,6 +59,28 @@ async function getDittoVersion(): Promise<string> {
   return 'unknown';
 }
 
+function parseVersion(version: string): { major: number; minor: number; patch: number; raw: string } {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    return { major: 0, minor: 0, patch: 0, raw: version };
+  }
+  return {
+    major: parseInt(match[1]),
+    minor: parseInt(match[2]), 
+    patch: parseInt(match[3]),
+    raw: version
+  };
+}
+
+function compareVersions(a: string, b: string): number {
+  const vA = parseVersion(a);
+  const vB = parseVersion(b);
+  
+  if (vA.major !== vB.major) return vB.major - vA.major;
+  if (vA.minor !== vB.minor) return vB.minor - vA.minor;
+  return vB.patch - vA.patch;
+}
+
 async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Promise<BenchmarkBaseline | null> {
   try {
     const result = await ditto.store.execute(
@@ -73,6 +95,47 @@ async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Pr
     // Collection might not exist yet, that's ok
   }
   return null;
+}
+
+async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion: string): Promise<BenchmarkBaseline[]> {
+  try {
+    const result = await ditto.store.execute(
+      "SELECT * FROM benchmark_baselines WHERE _id.hash = :hash",
+      { hash }
+    );
+    
+    if (result.items.length === 0) return [];
+    
+    const allBaselines = result.items.map(item => item.value as BenchmarkBaseline);
+    const currentParsed = parseVersion(currentVersion);
+    
+    // Filter out current version and sort by version descending
+    const otherVersions = allBaselines
+      .filter(baseline => baseline._id.ditto_version !== currentVersion)
+      .sort((a, b) => compareVersions(a._id.ditto_version, b._id.ditto_version));
+    
+    const comparisons: BenchmarkBaseline[] = [];
+    
+    // Get last 3 patches from same major.minor
+    const sameMinorVersions = otherVersions.filter(baseline => {
+      const parsed = parseVersion(baseline._id.ditto_version);
+      return parsed.major === currentParsed.major && parsed.minor === currentParsed.minor;
+    });
+    comparisons.push(...sameMinorVersions.slice(0, 3));
+    
+    // Get 1 latest from previous minor version (same major)
+    const previousMinorVersions = otherVersions.filter(baseline => {
+      const parsed = parseVersion(baseline._id.ditto_version);
+      return parsed.major === currentParsed.major && parsed.minor < currentParsed.minor;
+    });
+    if (previousMinorVersions.length > 0) {
+      comparisons.push(previousMinorVersions[0]);
+    }
+    
+    return comparisons;
+  } catch (error) {
+    return [];
+  }
 }
 
 async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<void> {
@@ -615,19 +678,15 @@ async function main() {
     console.log(`  Queries/sec: ${(1000 / mean).toFixed(2)}`);
     console.log(`  Total time:  ${(sum / 1000).toFixed(2)}s`);
     
-    // Compare with baseline if requested
+    // Compare with baselines if requested
     if (compareBaseline) {
       const hash = generateBenchmarkHash(preQueries, query);
       const dittoVersion = await getDittoVersion();
-      const baseline = await getBaseline(ditto, hash, dittoVersion);
+      const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
       
-      if (baseline) {
-        console.log(`\n${applyColor('Baseline Comparison', 'blue')}`);
-        console.log(`${applyColor('─'.repeat(30), 'blue')}`);
-        
-        const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
-        const medianDiff = ((median - baseline.metrics.median) / baseline.metrics.median) * 100;
-        const p95Diff = ((p95 - baseline.metrics.p95) / baseline.metrics.p95) * 100;
+      if (comparisonBaselines.length > 0) {
+        console.log(`\n${applyColor('Version Comparisons', 'blue')}`);
+        console.log(`${applyColor('─'.repeat(40), 'blue')}`);
         
         const formatDiff = (diff: number) => {
           const sign = diff >= 0 ? '+' : '';
@@ -635,13 +694,31 @@ async function main() {
           return applyColor(`${sign}${diff.toFixed(1)}%`, color);
         };
         
-        console.log(`  Baseline from: ${baseline.metrics.timestamp}`);
-        console.log(`  Mean:     ${mean.toFixed(2)}ms vs ${baseline.metrics.mean.toFixed(2)}ms (${formatDiff(meanDiff)})`);
-        console.log(`  Median:   ${median.toFixed(2)}ms vs ${baseline.metrics.median.toFixed(2)}ms (${formatDiff(medianDiff)})`);
-        console.log(`  95th %:   ${p95}ms vs ${baseline.metrics.p95}ms (${formatDiff(p95Diff)})`);
+        comparisonBaselines.forEach((baseline, index) => {
+          const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
+          const versionType = index < 3 ? 'patch' : 'minor';
+          console.log(`  vs v${baseline._id.ditto_version} (${versionType}): ${formatDiff(meanDiff)} (${baseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
+        });
       } else {
-        console.log(`\n${applyColor('No baseline found for this query/version combination', 'yellow_highlight')}`);
-        console.log(`Hash: ${hash}, Version: ${dittoVersion}`);
+        // Check if baseline exists for current version
+        const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
+        if (currentBaseline) {
+          console.log(`\n${applyColor('Baseline Comparison', 'blue')}`);
+          console.log(`${applyColor('─'.repeat(25), 'blue')}`);
+          
+          const meanDiff = ((mean - currentBaseline.metrics.mean) / currentBaseline.metrics.mean) * 100;
+          const formatDiff = (diff: number) => {
+            const sign = diff >= 0 ? '+' : '';
+            const color = Math.abs(diff) < 5 ? 'green' : Math.abs(diff) < 15 ? 'yellow_highlight' : 'red';
+            return applyColor(`${sign}${diff.toFixed(1)}%`, color);
+          };
+          
+          console.log(`  vs v${currentBaseline._id.ditto_version} baseline: ${formatDiff(meanDiff)} (${currentBaseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
+          console.log(`  No other versions available for comparison`);
+        } else {
+          console.log(`\n${applyColor('No baselines found for comparison', 'yellow_highlight')}`);
+          console.log(`Create baselines with '.benchmark_baseline' first`);
+        }
       }
     }
     
