@@ -683,9 +683,10 @@ async function main() {
       const hash = generateBenchmarkHash(preQueries, query);
       const dittoVersion = await getDittoVersion();
       const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
+      const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
       
-      if (comparisonBaselines.length > 0) {
-        console.log(`\n${applyColor(`Version Comparisons (current: v${dittoVersion})`, 'blue')}`);
+      if (comparisonBaselines.length > 0 || currentBaseline) {
+        console.log(`\n${applyColor(`Baseline Comparisons (current: v${dittoVersion})`, 'blue')}`);
         console.log(`${applyColor('─'.repeat(50), 'blue')}`);
         
         const formatDiff = (diff: number) => {
@@ -694,31 +695,25 @@ async function main() {
           return applyColor(`${sign}${diff.toFixed(1)}%`, color);
         };
         
-        comparisonBaselines.forEach((baseline, index) => {
-          const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
-          const versionType = index < 3 ? 'patch' : 'minor';
-          console.log(`  vs v${baseline._id.ditto_version} (${versionType}): ${formatDiff(meanDiff)} (${baseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
-        });
-      } else {
-        // Check if baseline exists for current version
-        const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
+        // Show current version baseline first if it exists
         if (currentBaseline) {
-          console.log(`\n${applyColor(`Baseline Comparison (current: v${dittoVersion})`, 'blue')}`);
-          console.log(`${applyColor('─'.repeat(40), 'blue')}`);
-          
           const meanDiff = ((mean - currentBaseline.metrics.mean) / currentBaseline.metrics.mean) * 100;
-          const formatDiff = (diff: number) => {
-            const sign = diff >= 0 ? '+' : '';
-            const color = Math.abs(diff) < 5 ? 'green' : Math.abs(diff) < 15 ? 'yellow_highlight' : 'red';
-            return applyColor(`${sign}${diff.toFixed(1)}%`, color);
-          };
-          
           console.log(`  vs v${currentBaseline._id.ditto_version} baseline: ${formatDiff(meanDiff)} (${currentBaseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
-          console.log(`  No other versions available for comparison`);
-        } else {
-          console.log(`\n${applyColor('No baselines found for comparison', 'yellow_highlight')}`);
-          console.log(`Create baselines with '.benchmark_baseline' first`);
         }
+        
+        // Show other version comparisons
+        if (comparisonBaselines.length > 0) {
+          comparisonBaselines.forEach((baseline, index) => {
+            const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
+            const versionType = index < 3 ? 'patch' : 'minor';
+            console.log(`  vs v${baseline._id.ditto_version} (${versionType}): ${formatDiff(meanDiff)} (${baseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
+          });
+        } else if (currentBaseline) {
+          console.log(`  No other versions available for comparison`);
+        }
+      } else {
+        console.log(`\n${applyColor('No baselines found for comparison', 'yellow_highlight')}`);
+        console.log(`Create baselines with '.benchmark_baseline' first`);
       }
     }
     
@@ -1034,6 +1029,12 @@ async function main() {
             hasBaseline: boolean;
           }> = [];
           
+          // Collect all baseline data by benchmark and version
+          const baselinesByBenchmark = new Map<string, Map<string, number>>();
+          const allVersions = new Set<string>();
+          const dittoVersion = await getDittoVersion();
+          allVersions.add(dittoVersion);
+          
           console.log(`\n${applyColor('Running all benchmarks...', 'blue')}`);
           console.log(`${applyColor(`Runs per benchmark: ${runCount}`, 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
@@ -1056,10 +1057,29 @@ async function main() {
             
             // Collect results for summary
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
-            const dittoVersion = await getDittoVersion();
             const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
             const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
             
+            // Store current run results
+            if (!baselinesByBenchmark.has(benchmarkName)) {
+              baselinesByBenchmark.set(benchmarkName, new Map());
+            }
+            const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
+            benchmarkData.set(dittoVersion, results.mean);
+            
+            // Store all historical baselines for this benchmark
+            comparisonBaselines.forEach(baseline => {
+              allVersions.add(baseline._id.ditto_version);
+              benchmarkData.set(baseline._id.ditto_version, baseline.metrics.mean);
+            });
+            
+            // Also include current version baseline if it exists (different from current run)
+            if (currentBaseline && currentBaseline.metrics.mean !== results.mean) {
+              benchmarkData.set(`${dittoVersion}-baseline`, currentBaseline.metrics.mean);
+              allVersions.add(`${dittoVersion}-baseline`);
+            }
+            
+            // For backward compatibility with existing summary logic
             let baselineMean: number | undefined;
             let percentChange: number | undefined;
             let hasBaseline = false;
@@ -1097,103 +1117,160 @@ async function main() {
           }
           
           // Generate comprehensive summary
-          console.log(`${applyColor('═'.repeat(60), 'blue')}`);
+          console.log(`${applyColor('═'.repeat(80), 'blue')}`);
           console.log(`${applyColor('BENCHMARK SUMMARY', 'blue')}`);
-          console.log(`${applyColor('═'.repeat(60), 'blue')}\n`);
+          console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
           
-          const formatDiff = (current: number, baseline: number) => {
+          // Sort versions (current first, then by version number descending)
+          const sortedVersions = Array.from(allVersions).sort((a, b) => {
+            if (a === dittoVersion) return -1;
+            if (b === dittoVersion) return 1;
+            return compareVersions(a, b);
+          });
+          
+          // Limit to 5 most recent versions for table width
+          const displayVersions = sortedVersions.slice(0, 5);
+          
+          // Generate table header
+          console.log('Benchmark Name                 ' + displayVersions.map(v => {
+            if (v === dittoVersion) {
+              return `Current (${v})`.padStart(15);
+            } else if (v.endsWith('-baseline')) {
+              const baseVersion = v.replace('-baseline', '');
+              return `${baseVersion} Baseline`.padStart(15);
+            } else {
+              return v.padStart(15);
+            }
+          }).join(' '));
+          console.log('─'.repeat(30) + ' ' + displayVersions.map(() => '─'.repeat(15)).join(' '));
+          
+          // Helper functions for table formatting
+          const formatCell = (value: number | undefined) => {
+            if (value === undefined) return '       -       ';
+            if (value === -1) return '      N/A      ';
+            return value.toFixed(1).padStart(15);
+          };
+          
+          const formatDiffCell = (current: number | undefined, baseline: number | undefined) => {
+            if (current === undefined || baseline === undefined) return '       -       ';
+            if (current === -1 || baseline === -1) return '      N/A      ';
+            
             const percentDiff = ((current - baseline) / baseline) * 100;
             const absoluteDiff = current - baseline;
             
-            // For fast queries (<10ms), show absolute difference; for slow queries, show percentage
-            const useAbsolute = baseline < 10;
-            const displayValue = useAbsolute ? 
-              `${absoluteDiff >= 0 ? '+' : ''}${absoluteDiff.toFixed(1)}ms` :
-              `${percentDiff >= 0 ? '+' : ''}${percentDiff.toFixed(1)}%`;
-            
             // Color based on performance impact
             let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
-            if (useAbsolute) {
-              // For absolute differences
+            if (baseline < 10) {
+              // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
-                color = 'blue'; // No significant change
+                color = 'blue';
               } else if (absoluteDiff < 0) {
-                color = 'green'; // Improvement (faster)
+                color = 'green';
               } else if (absoluteDiff < 2) {
-                color = 'yellow_highlight'; // Small regression
+                color = 'yellow_highlight';
               } else {
-                color = 'red'; // Large regression
+                color = 'red';
               }
             } else {
-              // For percentage differences
+              // For slow queries, use percentage
               if (Math.abs(percentDiff) < 5) {
-                color = 'blue'; // No significant change
+                color = 'blue';
               } else if (percentDiff < 0) {
-                color = 'green'; // Improvement (faster)
+                color = 'green';
               } else if (percentDiff < 15) {
-                color = 'yellow_highlight'; // Small regression
+                color = 'yellow_highlight';
               } else {
-                color = 'red'; // Large regression
+                color = 'red';
               }
             }
             
-            return { displayValue: applyColor(displayValue, color), percentDiff, absoluteDiff };
+            // Format the difference display
+            let displayValue: string;
+            if (baseline < 10) {
+              // For fast queries, show absolute difference
+              const sign = absoluteDiff >= 0 ? '+' : '';
+              displayValue = `${current.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
+            } else {
+              // For slow queries, show percentage
+              const sign = percentDiff >= 0 ? '+' : '';
+              displayValue = `${current.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
+            }
+            
+            return applyColor(displayValue.padStart(15), color);
           };
-          
-          // Sort results: regressions first, then improvements, then no baseline
-          const sortedResults = benchmarkResults.sort((a, b) => {
-            if (!a.hasBaseline && !b.hasBaseline) return 0;
-            if (!a.hasBaseline) return 1;
-            if (!b.hasBaseline) return -1;
-            return (b.percentChange || 0) - (a.percentChange || 0);
-          });
           
           let regressions = 0;
           let improvements = 0;
           let noChange = 0;
           let noBaseline = 0;
           
-          console.log(`${applyColor('Performance Changes:', 'blue')}`);
-          sortedResults.forEach((result) => {
-            if (!result.hasBaseline) {
-              console.log(`  ${applyColor('○', 'blue')} ${result.name.padEnd(30)} ${result.mean.toFixed(1)}ms (no baseline)`);
-              noBaseline++;
-            } else {
-              const diffResult = formatDiff(result.mean, result.baselineMean!);
-              const isSignificant = (result.baselineMean! < 10) ? 
-                Math.abs(diffResult.absoluteDiff) >= 1 : 
-                Math.abs(diffResult.percentDiff) >= 5;
+          // Sort benchmarks by name for consistent ordering
+          const sortedBenchmarks = Array.from(baselinesByBenchmark.entries()).sort(([a], [b]) => a.localeCompare(b));
+          
+          // Generate table rows
+          for (const [benchmarkName, versionData] of sortedBenchmarks) {
+            const row = [benchmarkName.padEnd(30)];
+            const currentValue = versionData.get(dittoVersion);
+            let hasAnyBaseline = false;
+            
+            for (let i = 0; i < displayVersions.length; i++) {
+              const version = displayVersions[i];
+              const value = versionData.get(version);
               
-              const changeIcon = isSignificant ? 
-                (diffResult.percentDiff > 0 ? '▲' : '▼') : '─';
-              const changeColor = isSignificant ? 
-                (diffResult.percentDiff > 0 ? 'red' : 'green') : 'blue';
-              
-              console.log(`  ${applyColor(changeIcon, changeColor)} ${result.name.padEnd(30)} ${result.mean.toFixed(1)}ms vs ${result.baselineMean?.toFixed(1)}ms (${diffResult.displayValue})`);
-              
-              if (!isSignificant) {
-                noChange++;
-              } else if (diffResult.percentDiff > 0) {
-                regressions++;
+              if (version === dittoVersion) {
+                // Current version - just show the value
+                row.push(formatCell(value));
+              } else if (version.endsWith('-baseline')) {
+                // Current version baseline - just show the value without comparison
+                row.push(formatCell(value));
               } else {
-                improvements++;
+                // Other versions - show with comparison
+                row.push(formatDiffCell(currentValue, value));
+                
+                // Count regressions/improvements (skip unsupported features)
+                if (currentValue !== undefined && currentValue !== -1 && 
+                    value !== undefined && value !== -1) {
+                  hasAnyBaseline = true;
+                  const percentDiff = ((currentValue - value) / value) * 100;
+                  const absoluteDiff = currentValue - value;
+                  const isSignificant = value < 10 ? Math.abs(absoluteDiff) >= 1 : Math.abs(percentDiff) >= 5;
+                  
+                  if (isSignificant) {
+                    if (percentDiff > 0) regressions++;
+                    else improvements++;
+                  } else {
+                    noChange++;
+                  }
+                }
               }
             }
-          });
+            
+            if (!hasAnyBaseline) noBaseline++;
+            console.log(row.join(' '));
+          }
           
-          console.log(`\n${applyColor('Summary Statistics:', 'blue')}`);
-          console.log(`  Total Benchmarks: ${benchmarkResults.length}`);
-          console.log(`  ${applyColor('▲ Regressions:', 'red')} ${regressions} (>1ms or >5% slower)`);
-          console.log(`  ${applyColor('▼ Improvements:', 'green')} ${improvements} (>1ms or >5% faster)`);
-          console.log(`  ${applyColor('─ No significant change:', 'blue')} ${noChange} (≤1ms or ≤5%)`);
-          console.log(`  ${applyColor('○ No baseline:', 'blue')} ${noBaseline}`);
+          console.log(`\n${applyColor('Legend:', 'blue')}`);
+          console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
+          console.log(`  ${applyColor('Yellow', 'yellow_highlight')} = Small regression (1-2ms or 5-15% slower)`);
+          console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
+          console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
           
-          if (regressions > 0) {
-            console.log(`\n${applyColor('⚠️  Performance Alert:', 'red')} ${regressions} benchmark(s) showing regression`);
-          } else if (improvements > noChange) {
-            console.log(`\n${applyColor('✅ Performance Improvement:', 'green')} More improvements than regressions detected`);
-          } else {
-            console.log(`\n${applyColor('✓ Performance Stable:', 'green')} No significant regressions detected`);
+          const totalComparisons = regressions + improvements + noChange;
+          if (totalComparisons > 0) {
+            console.log(`\n${applyColor('Summary vs Previous Versions:', 'blue')}`);
+            console.log(`  Total Comparisons: ${totalComparisons}`);
+            console.log(`  ${applyColor('Improvements:', 'green')} ${improvements} (${(improvements/totalComparisons*100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('Regressions:', 'red')} ${regressions} (${(regressions/totalComparisons*100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('No change:', 'blue')} ${noChange} (${(noChange/totalComparisons*100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('No baseline:', 'blue')} ${noBaseline}`);
+            
+            if (regressions > 0) {
+              console.log(`\n${applyColor('⚠️  Performance Alert:', 'red')} ${regressions} comparison(s) showing regression`);
+            } else if (improvements > noChange) {
+              console.log(`\n${applyColor('✅ Performance Improvement:', 'green')} More improvements than regressions detected`);
+            } else {
+              console.log(`\n${applyColor('✓ Performance Stable:', 'green')} No significant regressions detected`);
+            }
           }
           
           console.log(`${applyColor('═'.repeat(60), 'blue')}\n`);
