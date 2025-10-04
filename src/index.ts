@@ -93,7 +93,7 @@ function isVersionAtLeast(version: string, minMajor: number, minMinor: number, m
 async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Promise<BenchmarkBaseline | null> {
   try {
     const result = await ditto.store.execute(
-      "SELECT * FROM benchmark_baselines WHERE _id.hash = :hash AND _id.ditto_version = :version",
+      "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash AND _id.ditto_version = :version",
       { hash, version: dittoVersion }
     );
     
@@ -109,7 +109,7 @@ async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Pr
 async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion: string): Promise<BenchmarkBaseline[]> {
   try {
     const result = await ditto.store.execute(
-      "SELECT * FROM benchmark_baselines WHERE _id.hash = :hash",
+      "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash",
       { hash }
     );
     
@@ -150,7 +150,7 @@ async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion
 async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<void> {
   try {
     await ditto.store.execute(
-      "INSERT INTO benchmark_baselines DOCUMENTS (:baseline) ON ID CONFLICT DO UPDATE",
+      "INSERT INTO COLLECTION benchmark_baselines (metrics MAP) DOCUMENTS (:baseline) ON ID CONFLICT DO UPDATE",
       { baseline }
     );
   } catch (error) {
