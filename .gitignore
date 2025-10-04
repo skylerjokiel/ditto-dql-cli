@@ -2,6 +2,7 @@ node_modules/
 dist/
 ditto/
 exports/
+logs/
 .env
 *.log
 .DS_Store
