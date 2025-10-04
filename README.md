@@ -37,6 +37,7 @@ The terminal will automatically import the movie dataset on first run.
 - `.benchmark_baseline <name> [runs]` - Create baseline for specific benchmark
 - `.benchmark_show` - Display saved baseline comparison table
 - `.system` - Display comprehensive system information including Ditto version, hardware details, and database statistics
+- `.export <query>` - Export query results to `exports/export_<timestamp>.ndjson` file
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -226,6 +227,32 @@ Use this information to:
 - Debug performance differences
 - Track database growth
 - Verify index usage
+
+## Data Export
+
+Export query results to NDJSON format for backup, analysis, or migration:
+
+```
+.export SELECT * FROM movies                           # Export all movies
+.export SELECT * FROM movies WHERE rated = 'PG'       # Export filtered movies
+.export SELECT * FROM benchmark_baselines             # Export baseline data
+.export SELECT _id.title, runtime FROM movies LIMIT 100  # Export specific fields
+```
+
+The export command:
+- Executes any valid DQL query
+- Saves results in NDJSON (newline-delimited JSON) format
+- Creates an `exports/` directory if it doesn't exist
+- Generates timestamped filenames: `export_2024-10-04T09-30-15.ndjson`
+- Places files in the `exports/` directory (ignored by git)
+- Shows export statistics (document count, file size, location, query)
+- Handles query errors gracefully
+
+NDJSON format is ideal for:
+- Data backups and archiving
+- Importing into other systems
+- Analysis with tools like `jq` or custom scripts
+- Version control of dataset snapshots
 
 ## Adding New Scenarios
 

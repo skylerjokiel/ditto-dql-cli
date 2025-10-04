@@ -869,6 +869,7 @@ async function main() {
       console.log('  .benchmark_baseline <name> [runs] - Create baseline for specific benchmark');
       console.log('  .benchmark_show - Show saved baseline comparison table');
       console.log('  .system  - Show system information (document counts, indexes)');
+      console.log('  .export <query> - Export query results to exports/export_<timestamp>.ndjson');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -1783,6 +1784,62 @@ async function main() {
           }
           
           await benchmarkQuery(query, 20, [], false); // Don't compare baseline for ad-hoc queries
+        }
+        else if (input.toLowerCase().startsWith('.export ')) {
+          const queryStart = input.indexOf(' ') + 1;
+          if (queryStart === 0) {
+            console.log('Usage: .export <query>');
+            console.log('Examples:');
+            console.log('  .export SELECT * FROM movies');
+            console.log('  .export SELECT * FROM movies WHERE rated = "PG"');
+            console.log('  .export SELECT * FROM benchmark_baselines');
+            rl.prompt();
+            return;
+          }
+          
+          const query = input.substring(queryStart).trim();
+          
+          console.log(`\n${applyColor('Executing export query...', 'blue')}`);
+          console.log(`Query: ${applyColor(query, 'green')}`);
+          
+          try {
+            // Execute the query
+            const result = await ditto.store.execute(query);
+            
+            if (result.items.length === 0) {
+              console.log(`${applyColor('No documents returned by query', 'yellow_highlight')}`);
+              rl.prompt();
+              return;
+            }
+            
+            // Prepare NDJSON content
+            const ndjsonLines = result.items.map(item => JSON.stringify(item.value));
+            const ndjsonContent = ndjsonLines.join('\n');
+            
+            // Create exports directory if it doesn't exist
+            const exportsDir = path.join(process.cwd(), 'exports');
+            if (!fs.existsSync(exportsDir)) {
+              fs.mkdirSync(exportsDir, { recursive: true });
+            }
+            
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `export_${timestamp}.ndjson`;
+            const filepath = path.join(exportsDir, filename);
+            
+            fs.writeFileSync(filepath, ndjsonContent);
+            
+            console.log(`${applyColor('✅ Export successful!', 'green')}`);
+            console.log(`  Documents exported: ${result.items.length}`);
+            console.log(`  File: ${filepath}`);
+            console.log(`  Size: ${(Buffer.byteLength(ndjsonContent) / 1024).toFixed(2)} KB`);
+            console.log(`  Query: ${query}`);
+            
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log(`${applyColor('❌ Export failed:', 'red')} ${errorMessage}`);
+            console.log('Make sure the query is valid and syntactically correct.');
+          }
         }
         else if (input.toLowerCase() === '.system') {
           await showSystemInfo();
