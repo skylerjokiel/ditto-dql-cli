@@ -240,6 +240,59 @@ async function importMovies(ditto: Ditto) {
   }
 }
 
+async function importBaselines(ditto: Ditto) {
+  const docName = 'benchmark_baselines.ndjson';
+  const filePath = path.join(process.cwd(), docName);
+  
+  if (!fs.existsSync(filePath)) {
+    console.log(`${docName} not found, skipping baseline import.`);
+    return;
+  }
+
+  console.log('Starting benchmark baseline import...');
+  
+  try {   
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const lines = fileContent.trim().split('\n');
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const line of lines) {
+      try {
+        const baseline = JSON.parse(line);
+        await ditto.store.execute(
+          "INSERT INTO COLLECTION benchmark_baselines (metrics MAP) DOCUMENTS (:baseline) ON ID CONFLICT DO UPDATE",
+          { baseline }
+        );
+        successCount++;
+        
+        if (successCount % 50 === 0) {
+          console.log(`Imported ${successCount} baselines...`);
+        }
+      } catch (e) {
+        errorCount++;
+        console.error(`Failed to import baseline: ${e}`);
+      }
+    }
+    
+    console.log(`\nBaseline import complete!`);
+    console.log(`Successfully imported: ${successCount} baselines`);
+    console.log(`Errors: ${errorCount}`);
+    
+    // Show count
+    try {
+      const countResult = await ditto.store.execute("SELECT COUNT(*) FROM COLLECTION benchmark_baselines (metrics MAP)");
+      console.log(`Total baselines in collection: ${(countResult.items[0] as any).count}`);
+    } catch (error) {
+      // Collection might not exist yet, that's ok
+    }
+    
+  } catch (error) {
+    console.error('Baseline import failed:', error);
+  }
+}
+
 function extractIndexInfo(explainResult: any): string | null {
   try {
     const plan = explainResult?.plan;
@@ -384,6 +437,19 @@ async function main() {
   if (checkStoreResponse.items.length === 0) {
     console.log("Initializing the database with movie records.");
     await importMovies(ditto);
+  }
+
+  // Check if baseline collection exists and is empty
+  try {
+    const checkBaselinesResponse = await ditto.store.execute("SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) LIMIT 1");
+    if (checkBaselinesResponse.items.length === 0) {
+      console.log("Checking for baseline data to import...");
+      await importBaselines(ditto);
+    }
+  } catch (error) {
+    // Collection doesn't exist yet, try to import baselines
+    console.log("Baseline collection doesn't exist, checking for baseline data to import...");
+    await importBaselines(ditto);
   }
 
   const showSystemInfo = async () => {

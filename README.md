@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-The terminal will automatically import the movie dataset on first run.
+The terminal will automatically import the movie dataset on first run. If a `benchmark_baselines.ndjson` file exists in the root directory, it will also import baseline data.
 
 ## Basic Commands
 
@@ -191,6 +191,12 @@ Both `.benchmark_all` and `.benchmark_show` display comprehensive summary tables
 - 🔵 Blue = Minimal change (≤1ms or ≤5%)
 - 🟡 Yellow = Small regression (1-2ms or 5-15% slower)
 - 🔴 Red = Significant regression (>2ms or >15% slower)
+
+**Baseline Data Import:**
+If you have a `benchmark_baselines.ndjson` file in the root directory, the application will automatically import it on startup when the baseline collection is empty. This is useful for:
+- Sharing baseline data between team members
+- Restoring baseline data after database resets
+- Setting up consistent baseline data across environments
 
 **Adding Custom Benchmarks:**
 
