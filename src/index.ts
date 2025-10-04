@@ -132,14 +132,28 @@ async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion
     });
     comparisons.push(...sameMinorVersions.slice(0, 3));
     
-    // Get 1 latest from previous minor version (same major)
+    // Get latest from each previous minor version (same major)
     const previousMinorVersions = otherVersions.filter(baseline => {
       const parsed = parseVersion(baseline._id.ditto_version);
       return parsed.major === currentParsed.major && parsed.minor < currentParsed.minor;
     });
-    if (previousMinorVersions.length > 0) {
-      comparisons.push(previousMinorVersions[0]);
-    }
+    
+    // Group by minor version and get the latest from each
+    const minorGroups = new Map<number, BenchmarkBaseline>();
+    previousMinorVersions.forEach(baseline => {
+      const parsed = parseVersion(baseline._id.ditto_version);
+      const existing = minorGroups.get(parsed.minor);
+      if (!existing || compareVersions(existing._id.ditto_version, baseline._id.ditto_version) > 0) {
+        minorGroups.set(parsed.minor, baseline);
+      }
+    });
+    
+    // Add them in descending minor version order
+    const sortedMinors = Array.from(minorGroups.keys()).sort((a, b) => b - a);
+    sortedMinors.slice(0, 2).forEach(minor => {
+      const baseline = minorGroups.get(minor);
+      if (baseline) comparisons.push(baseline);
+    });
     
     return comparisons;
   } catch (error) {
@@ -653,7 +667,7 @@ async function main() {
           console.log(`Progress: ${percent}% (${i + 1}/${count})`);
         }
       } catch (error) {
-        console.log(`\n${applyColor('Feature not supported:', 'yellow_highlight')} ${error.message || error}`);
+        console.log(`\n${applyColor('Feature not supported:', 'yellow_highlight')} ${error instanceof Error ? error.message : String(error)}`);
         console.log('Skipping benchmark for this query');
         return {
           mean: -1, median: -1, min: -1, max: -1, stdDev: -1, p95: -1, p99: -1, resultCount: -1, times: []
@@ -852,6 +866,8 @@ async function main() {
       console.log('  .benchmark <name|index> [runs] - Run a specific benchmark (default: 5)');
       console.log('  .benchmark_all [runs] - Run all benchmarks (default: 5)');
       console.log('  .benchmark_baseline [runs] - Create baselines for all benchmarks (default: 50)');
+      console.log('  .benchmark_baseline <name> [runs] - Create baseline for specific benchmark');
+      console.log('  .benchmark_show - Show saved baseline comparison table');
       console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
@@ -1173,7 +1189,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1200,7 +1216,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1221,8 +1237,8 @@ async function main() {
             return compareVersions(a, b);
           });
           
-          // Limit to 5 most recent versions for table width
-          const displayVersions = sortedVersions.slice(0, 5);
+          // Limit to 7 most recent versions for table width
+          const displayVersions = sortedVersions.slice(0, 7);
           
           // Generate table header
           console.log('Benchmark Name                 ' + displayVersions.map(v => {
@@ -1381,19 +1397,55 @@ async function main() {
         }
         else if (input.toLowerCase().startsWith('.benchmark_baseline')) {
           const args = input.split(' ');
-          const runCount = args[1] ? parseInt(args[1]) : 50;
+          let benchmarkArg = args[1];
+          let runCount = 50;
           
-          if (isNaN(runCount) || runCount < 1) {
-            console.log('Run count must be a positive number');
-            rl.prompt();
-            return;
+          // Check if first arg is a number (run count for all) or benchmark name
+          if (benchmarkArg && !isNaN(parseInt(benchmarkArg))) {
+            // First arg is a number, so running all benchmarks
+            runCount = parseInt(benchmarkArg);
+            benchmarkArg = undefined;
+          } else if (args[2]) {
+            // Second arg might be run count
+            const secondArg = parseInt(args[2]);
+            if (!isNaN(secondArg) && secondArg > 0) {
+              runCount = secondArg;
+            }
           }
           
           const benchmarkKeys = Object.keys(benchmarks);
           const dittoVersion = await getDittoVersion();
+          
+          // Determine which benchmarks to run
+          let benchmarksToRun: string[];
+          
+          if (benchmarkArg) {
+            // Specific benchmark requested
+            let benchmarkName: string;
+            
+            // Check if arg is a number (index)
+            const index = parseInt(benchmarkArg);
+            if (!isNaN(index) && index > 0 && index <= benchmarkKeys.length) {
+              benchmarkName = benchmarkKeys[index - 1];
+            } else {
+              benchmarkName = benchmarkArg;
+            }
+            
+            if (!benchmarks[benchmarkName as keyof typeof benchmarks]) {
+              console.log(`Benchmark '${benchmarkArg}' not found. Use .benchmarks to see available benchmarks.`);
+              rl.prompt();
+              return;
+            }
+            
+            benchmarksToRun = [benchmarkName];
+            console.log(`\n${applyColor(`Creating Baseline for: ${benchmarkName}`, 'blue')}`);
+          } else {
+            // Run all benchmarks
+            benchmarksToRun = benchmarkKeys;
+            console.log(`\n${applyColor('Creating Baselines for All Benchmarks', 'blue')}`);
+          }
           let overwritePolicy: 'ask' | 'all' | 'none' = 'ask';
           
-          console.log(`\n${applyColor('Creating Baselines for All Benchmarks', 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}`);
           console.log(`Ditto Version: ${dittoVersion}`);
           console.log(`Runs per baseline: ${runCount}\n`);
@@ -1401,12 +1453,12 @@ async function main() {
           let skippedBaselines = 0;
           let benchmarkIndex = 0;
           
-          for (const benchmarkName of benchmarkKeys) {
+          for (const benchmarkName of benchmarksToRun) {
             benchmarkIndex++;
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
             
-            console.log(`${applyColor(`Creating baseline (${benchmarkIndex}/${benchmarkKeys.length}): ${benchmarkName}`, 'blue')}`);
+            console.log(`${applyColor(`Creating baseline (${benchmarkIndex}/${benchmarksToRun.length}): ${benchmarkName}`, 'blue')}`);
             console.log(`Hash: ${hash}`);
             
             try {
@@ -1507,7 +1559,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1525,7 +1577,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1534,7 +1586,7 @@ async function main() {
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           
-          const totalBaselines = benchmarkKeys.length;
+          const totalBaselines = benchmarksToRun.length;
           const successfulBaselines = totalBaselines - skippedBaselines;
           
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
@@ -1553,6 +1605,165 @@ async function main() {
           } else {
             console.log(`\n${applyColor('❌ No baselines were created due to errors', 'red')}`);
           }
+        }
+        else if (input.toLowerCase() === '.benchmark_show') {
+          const benchmarkKeys = Object.keys(benchmarks);
+          const dittoVersion = await getDittoVersion();
+          
+          console.log(`\n${applyColor('Loading saved baselines...', 'blue')}`);
+          
+          // Collect all baseline data by benchmark and version
+          const baselinesByBenchmark = new Map<string, Map<string, number>>();
+          const allVersions = new Set<string>();
+          allVersions.add(dittoVersion);
+          
+          for (const benchmarkName of benchmarkKeys) {
+            const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
+            const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
+            
+            // Get all baselines for this hash
+            try {
+              const result = await ditto.store.execute(
+                "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash",
+                { hash }
+              );
+              
+              if (result.items.length > 0) {
+                if (!baselinesByBenchmark.has(benchmarkName)) {
+                  baselinesByBenchmark.set(benchmarkName, new Map());
+                }
+                const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
+                
+                result.items.forEach(item => {
+                  const baseline = item.value as BenchmarkBaseline;
+                  if (baseline.metrics && baseline.metrics.mean !== undefined) {
+                    allVersions.add(baseline._id.ditto_version);
+                    benchmarkData.set(baseline._id.ditto_version, baseline.metrics.mean);
+                  }
+                });
+              }
+            } catch (error) {
+              // Skip if error
+            }
+          }
+          
+          if (baselinesByBenchmark.size === 0) {
+            console.log(`\n${applyColor('No baseline data found!', 'yellow_highlight')}`);
+            console.log(`Run '.benchmark_baseline' to create baselines first.`);
+            rl.prompt();
+            return;
+          }
+          
+          // Generate comprehensive summary
+          console.log(`\n${applyColor('═'.repeat(80), 'blue')}`);
+          console.log(`${applyColor('SAVED BASELINES', 'blue')}`);
+          console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
+          
+          // Sort versions (current first, then by version number descending)
+          const sortedVersions = Array.from(allVersions).sort((a, b) => {
+            if (a === dittoVersion) return -1;
+            if (b === dittoVersion) return 1;
+            return compareVersions(a, b);
+          });
+          
+          // Limit to 7 most recent versions for table width
+          const displayVersions = sortedVersions.slice(0, 7);
+          
+          // Generate table header
+          console.log('Benchmark Name                 ' + displayVersions.map(v => {
+            if (v === dittoVersion) {
+              return `${v} (current)`.padStart(15);
+            } else {
+              return v.padStart(15);
+            }
+          }).join(' '));
+          console.log('─'.repeat(30) + ' ' + displayVersions.map(() => '─'.repeat(15)).join(' '));
+          
+          // Helper function for formatting cells
+          const formatCell = (value: number | undefined) => {
+            if (value === undefined) return '       -       ';
+            return value.toFixed(1).padStart(15);
+          };
+          
+          // Helper function for formatting diff cells
+          const formatDiffCell = (current: number | undefined, baseline: number | undefined) => {
+            if (current === undefined || baseline === undefined) return '       -       ';
+            
+            const percentDiff = ((current - baseline) / baseline) * 100;
+            const absoluteDiff = current - baseline;
+            
+            // Color based on performance impact (matching table format)
+            let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+            if (baseline < 10) {
+              // For fast queries, use absolute difference
+              if (Math.abs(absoluteDiff) < 1) {
+                color = 'blue';
+              } else if (absoluteDiff < 0) {
+                color = 'green';
+              } else if (absoluteDiff < 2) {
+                color = 'yellow_highlight';
+              } else {
+                color = 'red';
+              }
+            } else {
+              // For slow queries, use percentage
+              if (Math.abs(percentDiff) < 5) {
+                color = 'blue';
+              } else if (percentDiff < 0) {
+                color = 'green';
+              } else if (percentDiff < 15) {
+                color = 'yellow_highlight';
+              } else {
+                color = 'red';
+              }
+            }
+            
+            // Format the difference display
+            let displayValue: string;
+            if (baseline < 10) {
+              // For fast queries, show absolute difference
+              const sign = absoluteDiff >= 0 ? '+' : '';
+              displayValue = `${baseline.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
+            } else {
+              // For slow queries, show percentage
+              const sign = percentDiff >= 0 ? '+' : '';
+              displayValue = `${baseline.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
+            }
+            
+            return applyColor(displayValue.padStart(15), color);
+          };
+          
+          // Sort benchmarks by name for consistent ordering
+          const sortedBenchmarks = Array.from(baselinesByBenchmark.entries()).sort(([a], [b]) => a.localeCompare(b));
+          
+          // Generate table rows
+          for (const [benchmarkName, versionData] of sortedBenchmarks) {
+            const row = [benchmarkName.padEnd(30)];
+            const currentValue = versionData.get(dittoVersion);
+            
+            for (const version of displayVersions) {
+              const value = versionData.get(version);
+              
+              if (version === dittoVersion || currentValue === undefined) {
+                // Current version or no current value - just show the value
+                row.push(formatCell(value));
+              } else {
+                // Other versions - show with comparison to current
+                row.push(formatDiffCell(currentValue, value));
+              }
+            }
+            
+            console.log(row.join(' '));
+          }
+          
+          console.log(`\n${applyColor('Legend:', 'blue')}`);
+          console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
+          console.log(`  ${applyColor('Yellow', 'yellow_highlight')} = Small regression (1-2ms or 5-15% slower)`);
+          console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
+          console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
+          
+          console.log(`\n${applyColor('Total benchmarks with baselines:', 'blue')} ${baselinesByBenchmark.size}`);
+          console.log(`${applyColor('Total versions tracked:', 'blue')} ${allVersions.size}`);
         }
         else if (input.toLowerCase().startsWith('.bench')) {
           const queryStart = input.indexOf(' ') + 1;
