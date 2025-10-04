@@ -807,9 +807,9 @@ async function main() {
       console.log('  .all     - Run all scenarios in sequence');
       console.log('  .bench <query> - Benchmark a query (20 runs)');
       console.log('  .benchmarks - List all available benchmarks');
-      console.log('  .benchmark <name|index> - Run a specific benchmark');
-      console.log('  .benchmark_all - Run all benchmarks');
-      console.log('  .benchmark_baseline - Create baselines for all benchmarks');
+      console.log('  .benchmark <name|index> [runs] - Run a specific benchmark (default: 5)');
+      console.log('  .benchmark_all [runs] - Run all benchmarks (default: 5)');
+      console.log('  .benchmark_baseline [runs] - Create baselines for all benchmarks (default: 50)');
       console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
@@ -821,6 +821,11 @@ async function main() {
       console.log('  - expectedIndex: automatically runs EXPLAIN and validates index usage');
       console.log('  - maxExecutionTime: validates query executes within time limit (ms)');
       console.log('  - Use "full_scan" to expect a full table scan');
+      console.log('\nBaseline overwrite options:');
+      console.log('  y/yes  - Overwrite this baseline');
+      console.log('  N/no   - Skip this baseline (default)');
+      console.log('  a/all  - Overwrite all remaining baselines');
+      console.log('  n/none - Skip all remaining baselines');
       console.log('\nExample queries:');
       console.log('  SELECT * FROM movies LIMIT 10');
       console.log('  SELECT title FROM movies WHERE year > 2020');
@@ -952,9 +957,18 @@ async function main() {
           console.log();
         }
         else if (input.toLowerCase().startsWith('.benchmark ')) {
-          const arg = input.split(' ')[1];
+          const args = input.split(' ');
+          const arg = args[1];
+          const runCount = args[2] ? parseInt(args[2]) : 5;
+          
           if (!arg) {
             console.log('Please provide a benchmark name or index number');
+            rl.prompt();
+            return;
+          }
+          
+          if (isNaN(runCount) || runCount < 1) {
+            console.log('Run count must be a positive number');
             rl.prompt();
             return;
           }
@@ -990,7 +1004,7 @@ async function main() {
           }
           
           console.log(`Query: ${benchmark.query}`);
-          await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || []);
+          await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
           
           // Run post-queries if they exist
           if (benchmark.postQueries && benchmark.postQueries.length > 0) {
@@ -1001,10 +1015,27 @@ async function main() {
             }
           }
         }
-        else if (input.toLowerCase() === '.benchmark_all') {
+        else if (input.toLowerCase().startsWith('.benchmark_all')) {
+          const args = input.split(' ');
+          const runCount = args[1] ? parseInt(args[1]) : 5;
+          
+          if (isNaN(runCount) || runCount < 1) {
+            console.log('Run count must be a positive number');
+            rl.prompt();
+            return;
+          }
+          
           const benchmarkKeys = Object.keys(benchmarks);
+          const benchmarkResults: Array<{
+            name: string;
+            mean: number;
+            baselineMean?: number;
+            percentChange?: number;
+            hasBaseline: boolean;
+          }> = [];
           
           console.log(`\n${applyColor('Running all benchmarks...', 'blue')}`);
+          console.log(`${applyColor(`Runs per benchmark: ${runCount}`, 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
           
           for (const benchmarkName of benchmarkKeys) {
@@ -1021,7 +1052,37 @@ async function main() {
             }
             
             console.log(`Query: ${benchmark.query}`);
-            await benchmarkQuery(benchmark.query, 20, benchmark.preQueries || []);
+            const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
+            
+            // Collect results for summary
+            const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
+            const dittoVersion = await getDittoVersion();
+            const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
+            const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
+            
+            let baselineMean: number | undefined;
+            let percentChange: number | undefined;
+            let hasBaseline = false;
+            
+            if (comparisonBaselines.length > 0) {
+              // Use the most recent comparison baseline
+              baselineMean = comparisonBaselines[0].metrics.mean;
+              percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
+              hasBaseline = true;
+            } else if (currentBaseline) {
+              // Fall back to current version baseline
+              baselineMean = currentBaseline.metrics.mean;
+              percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
+              hasBaseline = true;
+            }
+            
+            benchmarkResults.push({
+              name: benchmarkName,
+              mean: results.mean,
+              baselineMean,
+              percentChange,
+              hasBaseline
+            });
             
             // Run post-queries if they exist
             if (benchmark.postQueries && benchmark.postQueries.length > 0) {
@@ -1035,15 +1096,127 @@ async function main() {
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           
+          // Generate comprehensive summary
+          console.log(`${applyColor('═'.repeat(60), 'blue')}`);
+          console.log(`${applyColor('BENCHMARK SUMMARY', 'blue')}`);
+          console.log(`${applyColor('═'.repeat(60), 'blue')}\n`);
+          
+          const formatDiff = (current: number, baseline: number) => {
+            const percentDiff = ((current - baseline) / baseline) * 100;
+            const absoluteDiff = current - baseline;
+            
+            // For fast queries (<10ms), show absolute difference; for slow queries, show percentage
+            const useAbsolute = baseline < 10;
+            const displayValue = useAbsolute ? 
+              `${absoluteDiff >= 0 ? '+' : ''}${absoluteDiff.toFixed(1)}ms` :
+              `${percentDiff >= 0 ? '+' : ''}${percentDiff.toFixed(1)}%`;
+            
+            // Color based on performance impact
+            let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+            if (useAbsolute) {
+              // For absolute differences
+              if (Math.abs(absoluteDiff) < 1) {
+                color = 'blue'; // No significant change
+              } else if (absoluteDiff < 0) {
+                color = 'green'; // Improvement (faster)
+              } else if (absoluteDiff < 2) {
+                color = 'yellow_highlight'; // Small regression
+              } else {
+                color = 'red'; // Large regression
+              }
+            } else {
+              // For percentage differences
+              if (Math.abs(percentDiff) < 5) {
+                color = 'blue'; // No significant change
+              } else if (percentDiff < 0) {
+                color = 'green'; // Improvement (faster)
+              } else if (percentDiff < 15) {
+                color = 'yellow_highlight'; // Small regression
+              } else {
+                color = 'red'; // Large regression
+              }
+            }
+            
+            return { displayValue: applyColor(displayValue, color), percentDiff, absoluteDiff };
+          };
+          
+          // Sort results: regressions first, then improvements, then no baseline
+          const sortedResults = benchmarkResults.sort((a, b) => {
+            if (!a.hasBaseline && !b.hasBaseline) return 0;
+            if (!a.hasBaseline) return 1;
+            if (!b.hasBaseline) return -1;
+            return (b.percentChange || 0) - (a.percentChange || 0);
+          });
+          
+          let regressions = 0;
+          let improvements = 0;
+          let noChange = 0;
+          let noBaseline = 0;
+          
+          console.log(`${applyColor('Performance Changes:', 'blue')}`);
+          sortedResults.forEach((result) => {
+            if (!result.hasBaseline) {
+              console.log(`  ${applyColor('○', 'blue')} ${result.name.padEnd(30)} ${result.mean.toFixed(1)}ms (no baseline)`);
+              noBaseline++;
+            } else {
+              const diffResult = formatDiff(result.mean, result.baselineMean!);
+              const isSignificant = (result.baselineMean! < 10) ? 
+                Math.abs(diffResult.absoluteDiff) >= 1 : 
+                Math.abs(diffResult.percentDiff) >= 5;
+              
+              const changeIcon = isSignificant ? 
+                (diffResult.percentDiff > 0 ? '▲' : '▼') : '─';
+              const changeColor = isSignificant ? 
+                (diffResult.percentDiff > 0 ? 'red' : 'green') : 'blue';
+              
+              console.log(`  ${applyColor(changeIcon, changeColor)} ${result.name.padEnd(30)} ${result.mean.toFixed(1)}ms vs ${result.baselineMean?.toFixed(1)}ms (${diffResult.displayValue})`);
+              
+              if (!isSignificant) {
+                noChange++;
+              } else if (diffResult.percentDiff > 0) {
+                regressions++;
+              } else {
+                improvements++;
+              }
+            }
+          });
+          
+          console.log(`\n${applyColor('Summary Statistics:', 'blue')}`);
+          console.log(`  Total Benchmarks: ${benchmarkResults.length}`);
+          console.log(`  ${applyColor('▲ Regressions:', 'red')} ${regressions} (>1ms or >5% slower)`);
+          console.log(`  ${applyColor('▼ Improvements:', 'green')} ${improvements} (>1ms or >5% faster)`);
+          console.log(`  ${applyColor('─ No significant change:', 'blue')} ${noChange} (≤1ms or ≤5%)`);
+          console.log(`  ${applyColor('○ No baseline:', 'blue')} ${noBaseline}`);
+          
+          if (regressions > 0) {
+            console.log(`\n${applyColor('⚠️  Performance Alert:', 'red')} ${regressions} benchmark(s) showing regression`);
+          } else if (improvements > noChange) {
+            console.log(`\n${applyColor('✅ Performance Improvement:', 'green')} More improvements than regressions detected`);
+          } else {
+            console.log(`\n${applyColor('✓ Performance Stable:', 'green')} No significant regressions detected`);
+          }
+          
+          console.log(`${applyColor('═'.repeat(60), 'blue')}\n`);
           console.log(`${applyColor('All benchmarks complete!', 'green')}`);
         }
-        else if (input.toLowerCase() === '.benchmark_baseline') {
+        else if (input.toLowerCase().startsWith('.benchmark_baseline')) {
+          const args = input.split(' ');
+          const runCount = args[1] ? parseInt(args[1]) : 50;
+          
+          if (isNaN(runCount) || runCount < 1) {
+            console.log('Run count must be a positive number');
+            rl.prompt();
+            return;
+          }
+          
           const benchmarkKeys = Object.keys(benchmarks);
           const dittoVersion = await getDittoVersion();
+          let overwritePolicy: 'ask' | 'all' | 'none' = 'ask';
           
           console.log(`\n${applyColor('Creating Baselines for All Benchmarks', 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}`);
-          console.log(`Ditto Version: ${dittoVersion}\n`);
+          console.log(`Ditto Version: ${dittoVersion}`);
+          console.log(`Runs per baseline: ${runCount}\n`);
           
           for (const benchmarkName of benchmarkKeys) {
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
@@ -1058,18 +1231,35 @@ async function main() {
               console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'yellow_highlight')}`);
               console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
               
-              const answer = await new Promise<string>((resolve) => {
-                const rl = readline.createInterface({
-                  input: process.stdin,
-                  output: process.stdout
-                });
-                rl.question('Overwrite existing baseline? (y/N): ', (answer) => {
-                  rl.close();
-                  resolve(answer.toLowerCase().trim());
-                });
-              });
+              let shouldOverwrite = false;
               
-              if (answer !== 'y' && answer !== 'yes') {
+              if (overwritePolicy === 'ask') {
+                const answer = await new Promise<string>((resolve) => {
+                  rl.question('Overwrite existing baseline? (y/N/a=all/n=none): ', (answer) => {
+                    resolve(answer.toLowerCase().trim());
+                  });
+                });
+                
+                if (answer === 'a' || answer === 'all') {
+                  overwritePolicy = 'all';
+                  shouldOverwrite = true;
+                  console.log(`${applyColor('✓ Will overwrite all remaining baselines', 'green')}`);
+                } else if (answer === 'n' || answer === 'none') {
+                  overwritePolicy = 'none';
+                  shouldOverwrite = false;
+                  console.log(`${applyColor('✗ Will skip all remaining baselines', 'red')}`);
+                } else if (answer === 'y' || answer === 'yes') {
+                  shouldOverwrite = true;
+                } else {
+                  shouldOverwrite = false;
+                }
+              } else if (overwritePolicy === 'all') {
+                shouldOverwrite = true;
+              } else if (overwritePolicy === 'none') {
+                shouldOverwrite = false;
+              }
+              
+              if (!shouldOverwrite) {
                 console.log(`${applyColor('Skipped baseline creation for:', 'blue')} ${benchmarkName}`);
                 console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
                 continue;
@@ -1088,12 +1278,17 @@ async function main() {
             }
             
             console.log(`Query: ${benchmark.query}`);
-            const results = await benchmarkQuery(benchmark.query, 50, benchmark.preQueries || [], false);
+            const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || [], false);
             
-            // Create baseline document
+            // Create baseline document (truncate query if too long to fit in 256 byte _id limit)
+            const maxQueryLength = 100; // Conservative limit to ensure _id stays under 256 bytes
+            const queryForId = benchmark.query.length > maxQueryLength 
+              ? `${benchmark.query.substring(0, maxQueryLength)}...` 
+              : benchmark.query;
+              
             const baseline: BenchmarkBaseline = {
               _id: {
-                query: benchmark.query,
+                query: queryForId,
                 hash: hash,
                 ditto_version: dittoVersion
               },
@@ -1106,7 +1301,7 @@ async function main() {
                 p95: results.p95,
                 p99: results.p99,
                 resultCount: results.resultCount,
-                runs: 50,
+                runs: runCount,
                 timestamp: new Date().toISOString()
               }
             };
