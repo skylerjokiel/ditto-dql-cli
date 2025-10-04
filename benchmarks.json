@@ -73,6 +73,16 @@
     "multi_field_filter": {
         "query": "SELECT * FROM movies WHERE rated = 'PG' AND runtime > 120"
     },
+    "multi_field_filter_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated_runtime ON movies",
+            "CREATE INDEX movies_rated_runtime ON movies (rated, runtime)"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG' AND runtime > 120",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_rated_runtime ON movies"
+        ]
+    },
     "text_search_plot": {
         "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love')"
     },

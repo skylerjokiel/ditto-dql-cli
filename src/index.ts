@@ -639,9 +639,10 @@ async function main() {
           console.log(`Progress: ${percent}% (${i + 1}/${count})`);
         }
       } catch (error) {
-        console.error(`Error on run ${i + 1}:`, error);
+        console.log(`\n${applyColor('Feature not supported:', 'yellow_highlight')} ${error.message || error}`);
+        console.log('Skipping benchmark for this query');
         return {
-          mean: 0, median: 0, min: 0, max: 0, stdDev: 0, p95: 0, p99: 0, resultCount: 0, times: []
+          mean: -1, median: -1, min: -1, max: -1, stdDev: -1, p95: -1, p99: -1, resultCount: -1, times: []
         };
       }
     }
@@ -678,8 +679,8 @@ async function main() {
     console.log(`  Queries/sec: ${(1000 / mean).toFixed(2)}`);
     console.log(`  Total time:  ${(sum / 1000).toFixed(2)}s`);
     
-    // Compare with baselines if requested
-    if (compareBaseline) {
+    // Compare with baselines if requested (only if query is supported)
+    if (compareBaseline && mean !== -1) {
       const hash = generateBenchmarkHash(preQueries, query);
       const dittoVersion = await getDittoVersion();
       const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
@@ -1039,77 +1040,121 @@ async function main() {
           console.log(`${applyColor(`Runs per benchmark: ${runCount}`, 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
           
+          let skippedBenchmarks = 0;
+          
           for (const benchmarkName of benchmarkKeys) {
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             console.log(`${applyColor(`Running benchmark: ${benchmarkName}`, 'blue')}`);
             
-            // Run pre-queries if they exist
-            if (benchmark.preQueries && benchmark.preQueries.length > 0) {
-              console.log(`${applyColor('Running setup queries...', 'blue')}`);
-              for (const preQuery of benchmark.preQueries) {
-                console.log(`  Setup: ${preQuery}`);
-                await ditto.store.execute(preQuery);
+            try {
+              // Run pre-queries if they exist
+              if (benchmark.preQueries && benchmark.preQueries.length > 0) {
+                console.log(`${applyColor('Running setup queries...', 'blue')}`);
+                for (const preQuery of benchmark.preQueries) {
+                  console.log(`  Setup: ${preQuery}`);
+                  await ditto.store.execute(preQuery);
+                }
               }
-            }
+              
+              console.log(`Query: ${benchmark.query}`);
+              const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
             
-            console.log(`Query: ${benchmark.query}`);
-            const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
-            
-            // Collect results for summary
-            const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
-            const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
-            const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
-            
-            // Store current run results
-            if (!baselinesByBenchmark.has(benchmarkName)) {
-              baselinesByBenchmark.set(benchmarkName, new Map());
-            }
-            const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
-            benchmarkData.set(dittoVersion, results.mean);
-            
-            // Store all historical baselines for this benchmark
-            comparisonBaselines.forEach(baseline => {
-              allVersions.add(baseline._id.ditto_version);
-              benchmarkData.set(baseline._id.ditto_version, baseline.metrics.mean);
-            });
-            
-            // Also include current version baseline if it exists (different from current run)
-            if (currentBaseline && currentBaseline.metrics.mean !== results.mean) {
-              benchmarkData.set(`${dittoVersion}-baseline`, currentBaseline.metrics.mean);
-              allVersions.add(`${dittoVersion}-baseline`);
-            }
-            
-            // For backward compatibility with existing summary logic
-            let baselineMean: number | undefined;
-            let percentChange: number | undefined;
-            let hasBaseline = false;
-            
-            if (comparisonBaselines.length > 0) {
-              // Use the most recent comparison baseline
-              baselineMean = comparisonBaselines[0].metrics.mean;
-              percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
-              hasBaseline = true;
-            } else if (currentBaseline) {
-              // Fall back to current version baseline
-              baselineMean = currentBaseline.metrics.mean;
-              percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
-              hasBaseline = true;
-            }
-            
-            benchmarkResults.push({
-              name: benchmarkName,
-              mean: results.mean,
-              baselineMean,
-              percentChange,
-              hasBaseline
-            });
-            
-            // Run post-queries if they exist
-            if (benchmark.postQueries && benchmark.postQueries.length > 0) {
-              console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
-              for (const postQuery of benchmark.postQueries) {
-                console.log(`  Cleanup: ${postQuery}`);
-                await ditto.store.execute(postQuery);
+              // Only collect baseline data if query is supported
+              if (results.mean !== -1) {
+                // Collect results for summary
+                const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
+                const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
+                const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
+                
+                // Store current run results
+                if (!baselinesByBenchmark.has(benchmarkName)) {
+                  baselinesByBenchmark.set(benchmarkName, new Map());
+                }
+                const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
+                benchmarkData.set(dittoVersion, results.mean);
+                
+                // Store all historical baselines for this benchmark
+                comparisonBaselines.forEach(baseline => {
+                  allVersions.add(baseline._id.ditto_version);
+                  benchmarkData.set(baseline._id.ditto_version, baseline.metrics.mean);
+                });
+                
+                // Also include current version baseline if it exists (different from current run)
+                if (currentBaseline && currentBaseline.metrics.mean !== results.mean) {
+                  benchmarkData.set(`${dittoVersion}-baseline`, currentBaseline.metrics.mean);
+                  allVersions.add(`${dittoVersion}-baseline`);
+                }
+              }
+              
+              // For backward compatibility with existing summary logic
+              let baselineMean: number | undefined;
+              let percentChange: number | undefined;
+              let hasBaseline = false;
+              
+              if (results.mean !== -1) {
+                const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
+                const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
+                const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
+                
+                if (comparisonBaselines.length > 0) {
+                  // Use the most recent comparison baseline
+                  baselineMean = comparisonBaselines[0].metrics.mean;
+                  percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
+                  hasBaseline = true;
+                } else if (currentBaseline) {
+                  // Fall back to current version baseline
+                  baselineMean = currentBaseline.metrics.mean;
+                  percentChange = ((results.mean - baselineMean) / baselineMean) * 100;
+                  hasBaseline = true;
+                }
+              }
+              
+              benchmarkResults.push({
+                name: benchmarkName,
+                mean: results.mean,
+                baselineMean,
+                percentChange,
+                hasBaseline
+              });
+              
+              // Run post-queries if they exist
+              if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+                console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
+                for (const postQuery of benchmark.postQueries) {
+                  try {
+                    console.log(`  Cleanup: ${postQuery}`);
+                    await ditto.store.execute(postQuery);
+                  } catch (cleanupError) {
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                  }
+                }
+              }
+              
+            } catch (error: any) {
+              console.log(`${applyColor('❌ Benchmark failed:', 'red')} ${error.message || error}`);
+              console.log(`${applyColor('Skipping benchmark:', 'yellow_highlight')} ${benchmarkName}`);
+              skippedBenchmarks++;
+              
+              // Still add to results but with error indicators
+              benchmarkResults.push({
+                name: benchmarkName,
+                mean: -1,
+                baselineMean: undefined,
+                percentChange: undefined,
+                hasBaseline: false
+              });
+              
+              // Try to run cleanup queries even if main benchmark failed
+              if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+                console.log(`${applyColor('Attempting cleanup after failure...', 'blue')}`);
+                for (const postQuery of benchmark.postQueries) {
+                  try {
+                    console.log(`  Cleanup: ${postQuery}`);
+                    await ditto.store.execute(postQuery);
+                  } catch (cleanupError) {
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                  }
+                }
               }
             }
             
@@ -1256,8 +1301,18 @@ async function main() {
           console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
           
           const totalComparisons = regressions + improvements + noChange;
+          const totalBenchmarks = benchmarkKeys.length;
+          const successfulBenchmarks = totalBenchmarks - skippedBenchmarks;
+          
+          console.log(`\n${applyColor('Benchmark Execution Summary:', 'blue')}`);
+          console.log(`  Total Benchmarks: ${totalBenchmarks}`);
+          console.log(`  ${applyColor('Successful:', 'green')} ${successfulBenchmarks}`);
+          if (skippedBenchmarks > 0) {
+            console.log(`  ${applyColor('Skipped (errors):', 'red')} ${skippedBenchmarks}`);
+          }
+          
           if (totalComparisons > 0) {
-            console.log(`\n${applyColor('Summary vs Previous Versions:', 'blue')}`);
+            console.log(`\n${applyColor('Performance Comparison Summary:', 'blue')}`);
             console.log(`  Total Comparisons: ${totalComparisons}`);
             console.log(`  ${applyColor('Improvements:', 'green')} ${improvements} (${(improvements/totalComparisons*100).toFixed(0)}%)`);
             console.log(`  ${applyColor('Regressions:', 'red')} ${regressions} (${(regressions/totalComparisons*100).toFixed(0)}%)`);
@@ -1295,6 +1350,8 @@ async function main() {
           console.log(`Ditto Version: ${dittoVersion}`);
           console.log(`Runs per baseline: ${runCount}\n`);
           
+          let skippedBaselines = 0;
+          
           for (const benchmarkName of benchmarkKeys) {
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
@@ -1302,103 +1359,150 @@ async function main() {
             console.log(`${applyColor(`Creating baseline: ${benchmarkName}`, 'blue')}`);
             console.log(`Hash: ${hash}`);
             
-            // Check if baseline already exists
-            const existingBaseline = await getBaseline(ditto, hash, dittoVersion);
-            if (existingBaseline) {
-              console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'yellow_highlight')}`);
-              console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
-              
-              let shouldOverwrite = false;
-              
-              if (overwritePolicy === 'ask') {
-                const answer = await new Promise<string>((resolve) => {
-                  rl.question('Overwrite existing baseline? (y/N/a=all/n=none): ', (answer) => {
-                    resolve(answer.toLowerCase().trim());
-                  });
-                });
+            try {
+              // Check if baseline already exists
+              const existingBaseline = await getBaseline(ditto, hash, dittoVersion);
+              if (existingBaseline) {
+                console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'yellow_highlight')}`);
+                console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
                 
-                if (answer === 'a' || answer === 'all') {
-                  overwritePolicy = 'all';
+                let shouldOverwrite = false;
+                
+                if (overwritePolicy === 'ask') {
+                  const answer = await new Promise<string>((resolve) => {
+                    rl.question('Overwrite existing baseline? (y/N/a=all/n=none): ', (answer) => {
+                      resolve(answer.toLowerCase().trim());
+                    });
+                  });
+                  
+                  if (answer === 'a' || answer === 'all') {
+                    overwritePolicy = 'all';
+                    shouldOverwrite = true;
+                    console.log(`${applyColor('✓ Will overwrite all remaining baselines', 'green')}`);
+                  } else if (answer === 'n' || answer === 'none') {
+                    overwritePolicy = 'none';
+                    shouldOverwrite = false;
+                    console.log(`${applyColor('✗ Will skip all remaining baselines', 'red')}`);
+                  } else if (answer === 'y' || answer === 'yes') {
+                    shouldOverwrite = true;
+                  } else {
+                    shouldOverwrite = false;
+                  }
+                } else if (overwritePolicy === 'all') {
                   shouldOverwrite = true;
-                  console.log(`${applyColor('✓ Will overwrite all remaining baselines', 'green')}`);
-                } else if (answer === 'n' || answer === 'none') {
-                  overwritePolicy = 'none';
-                  shouldOverwrite = false;
-                  console.log(`${applyColor('✗ Will skip all remaining baselines', 'red')}`);
-                } else if (answer === 'y' || answer === 'yes') {
-                  shouldOverwrite = true;
-                } else {
+                } else if (overwritePolicy === 'none') {
                   shouldOverwrite = false;
                 }
-              } else if (overwritePolicy === 'all') {
-                shouldOverwrite = true;
-              } else if (overwritePolicy === 'none') {
-                shouldOverwrite = false;
+                
+                if (!shouldOverwrite) {
+                  console.log(`${applyColor('Skipped baseline creation for:', 'blue')} ${benchmarkName}`);
+                  console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
+                  continue;
+                }
+                
+                console.log(`${applyColor('Overwriting existing baseline...', 'blue')}`);
               }
               
-              if (!shouldOverwrite) {
-                console.log(`${applyColor('Skipped baseline creation for:', 'blue')} ${benchmarkName}`);
-                console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
-                continue;
+              // Run pre-queries if they exist
+              if (benchmark.preQueries && benchmark.preQueries.length > 0) {
+                console.log(`${applyColor('Running setup queries...', 'blue')}`);
+                for (const preQuery of benchmark.preQueries) {
+                  console.log(`  Setup: ${preQuery}`);
+                  await ditto.store.execute(preQuery);
+                }
               }
               
-              console.log(`${applyColor('Overwriting existing baseline...', 'blue')}`);
-            }
+              console.log(`Query: ${benchmark.query}`);
+              const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || [], false);
             
-            // Run pre-queries if they exist
-            if (benchmark.preQueries && benchmark.preQueries.length > 0) {
-              console.log(`${applyColor('Running setup queries...', 'blue')}`);
-              for (const preQuery of benchmark.preQueries) {
-                console.log(`  Setup: ${preQuery}`);
-                await ditto.store.execute(preQuery);
+              // Only save baseline if query is supported
+              if (results.mean !== -1) {
+                // Create baseline document (truncate query if too long to fit in 256 byte _id limit)
+                const maxQueryLength = 100; // Conservative limit to ensure _id stays under 256 bytes
+                const queryForId = benchmark.query.length > maxQueryLength 
+                  ? `${benchmark.query.substring(0, maxQueryLength)}...` 
+                  : benchmark.query;
+                  
+                const baseline: BenchmarkBaseline = {
+                  _id: {
+                    query: queryForId,
+                    hash: hash,
+                    ditto_version: dittoVersion
+                  },
+                  metrics: {
+                    mean: results.mean,
+                    median: results.median,
+                    min: results.min,
+                    max: results.max,
+                    stdDev: results.stdDev,
+                    p95: results.p95,
+                    p99: results.p99,
+                    resultCount: results.resultCount,
+                    runs: runCount,
+                    timestamp: new Date().toISOString()
+                  }
+                };
+                
+                await saveBaseline(ditto, baseline);
+                console.log(`${applyColor('✓ Baseline saved', 'green')}`);
+              } else {
+                console.log(`${applyColor('⚠️ Skipped baseline creation (feature not supported)', 'yellow_highlight')}`);
               }
-            }
-            
-            console.log(`Query: ${benchmark.query}`);
-            const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || [], false);
-            
-            // Create baseline document (truncate query if too long to fit in 256 byte _id limit)
-            const maxQueryLength = 100; // Conservative limit to ensure _id stays under 256 bytes
-            const queryForId = benchmark.query.length > maxQueryLength 
-              ? `${benchmark.query.substring(0, maxQueryLength)}...` 
-              : benchmark.query;
               
-            const baseline: BenchmarkBaseline = {
-              _id: {
-                query: queryForId,
-                hash: hash,
-                ditto_version: dittoVersion
-              },
-              metrics: {
-                mean: results.mean,
-                median: results.median,
-                min: results.min,
-                max: results.max,
-                stdDev: results.stdDev,
-                p95: results.p95,
-                p99: results.p99,
-                resultCount: results.resultCount,
-                runs: runCount,
-                timestamp: new Date().toISOString()
+              // Run post-queries if they exist
+              if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+                console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
+                for (const postQuery of benchmark.postQueries) {
+                  try {
+                    console.log(`  Cleanup: ${postQuery}`);
+                    await ditto.store.execute(postQuery);
+                  } catch (cleanupError) {
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                  }
+                }
               }
-            };
-            
-            await saveBaseline(ditto, baseline);
-            console.log(`${applyColor('✓ Baseline saved', 'green')}`);
-            
-            // Run post-queries if they exist
-            if (benchmark.postQueries && benchmark.postQueries.length > 0) {
-              console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
-              for (const postQuery of benchmark.postQueries) {
-                console.log(`  Cleanup: ${postQuery}`);
-                await ditto.store.execute(postQuery);
+              
+            } catch (error: any) {
+              console.log(`${applyColor('❌ Baseline creation failed:', 'red')} ${error.message || error}`);
+              console.log(`${applyColor('Skipping baseline for:', 'yellow_highlight')} ${benchmarkName}`);
+              skippedBaselines++;
+              
+              // Try to run cleanup queries even if baseline creation failed
+              if (benchmark.postQueries && benchmark.postQueries.length > 0) {
+                console.log(`${applyColor('Attempting cleanup after failure...', 'blue')}`);
+                for (const postQuery of benchmark.postQueries) {
+                  try {
+                    console.log(`  Cleanup: ${postQuery}`);
+                    await ditto.store.execute(postQuery);
+                  } catch (cleanupError) {
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError.message || cleanupError}`);
+                  }
+                }
               }
             }
             
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
           
-          console.log(`${applyColor('All baselines created successfully!', 'green')}`);
+          const totalBaselines = benchmarkKeys.length;
+          const successfulBaselines = totalBaselines - skippedBaselines;
+          
+          console.log(`${applyColor('═'.repeat(50), 'blue')}`);
+          console.log(`${applyColor('BASELINE CREATION SUMMARY', 'blue')}`);
+          console.log(`${applyColor('═'.repeat(50), 'blue')}`);
+          console.log(`  Total Benchmarks: ${totalBaselines}`);
+          console.log(`  ${applyColor('Baselines Created:', 'green')} ${successfulBaselines}`);
+          if (skippedBaselines > 0) {
+            console.log(`  ${applyColor('Skipped (errors):', 'red')} ${skippedBaselines}`);
+          }
+          
+          if (skippedBaselines === 0) {
+            console.log(`\n${applyColor('✅ All baselines created successfully!', 'green')}`);
+          } else if (successfulBaselines > 0) {
+            console.log(`\n${applyColor('⚠️ Baseline creation completed with some failures', 'yellow_highlight')}`);
+          } else {
+            console.log(`\n${applyColor('❌ No baselines were created due to errors', 'red')}`);
+          }
         }
         else if (input.toLowerCase().startsWith('.bench')) {
           const queryStart = input.indexOf(' ') + 1;
