@@ -424,14 +424,18 @@ async function main() {
     console.warn("DQL_STRICT_MODE = true because running version is <4.11.0");
   }
 
-  // Restrict `movies` collection to be local only 
-  const syncScopes = {
-    movies: "LocalPeerOnly"
-  };
-  await ditto.store.execute(
-    "ALTER SYSTEM SET USER_COLLECTION_SYNC_SCOPES = :syncScopes",
-    { syncScopes }
-  );
+  // Restrict `movies` collection to be local only (4.10.0+)
+  if (isVersionAtLeast(dittoVersion, 4, 10, 0)) {
+    const syncScopes = {
+      movies: "LocalPeerOnly"
+    };
+    await ditto.store.execute(
+      "ALTER SYSTEM SET USER_COLLECTION_SYNC_SCOPES = :syncScopes",
+      { syncScopes }
+    );
+  } else {
+    console.warn("USER_COLLECTION_SYNC_SCOPES not set because running version is <4.10.0");
+  }
 
   const checkStoreResponse = await ditto.store.execute("SELECT * FROM movies LIMIT 1");
   if (checkStoreResponse.items.length === 0) {
@@ -560,7 +564,7 @@ async function main() {
       
       console.log(`\nStorage Information:`);
       console.log(`  Working Directory: ${applyColor(process.cwd(), 'green')}`);
-      console.log(`  Ditto Directory: ${applyColor(ditto.absolutePersistenceDirectory, 'green')}`);
+      console.log(`  Ditto Directory: ${applyColor(ditto.persistenceDirectory, 'green')}`);
       console.log(`  Ditto Database Size: ${applyColor(dittoDirSize, 'green')}`);
       
       // Database Statistics Section
