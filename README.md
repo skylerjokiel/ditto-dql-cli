@@ -33,7 +33,9 @@ The terminal will automatically import the movie dataset on first run.
 - `.benchmarks` - List all available predefined benchmarks
 - `.benchmark <name|index> [runs]` - Run a specific predefined benchmark with optional run count (default: 5)
 - `.benchmark_all [runs]` - Run all predefined benchmarks with optional run count
-- `.benchmark_baseline [runs]` - Run all benchmarks and save results as performance baselines (default: 50 runs)
+- `.benchmark_baseline [runs]` - Create baselines for all benchmarks (default: 50 runs)
+- `.benchmark_baseline <name> [runs]` - Create baseline for specific benchmark
+- `.benchmark_show` - Display saved baseline comparison table
 - `.system` - Display comprehensive system information including Ditto version, hardware details, and database statistics
 - `.exit` - Exit the terminal
 
@@ -171,20 +173,23 @@ The application includes predefined benchmark suites for common query patterns:
 Track performance changes across Ditto versions using the baseline system:
 
 ```
-.benchmark_baseline            # Create baseline for current version (50 runs)
-.benchmark_baseline 100        # Create baseline with custom run count
+.benchmark_baseline            # Create baseline for all benchmarks (50 runs)
+.benchmark_baseline 100        # Create baseline for all with custom run count
+.benchmark_baseline count      # Create baseline for specific benchmark
+.benchmark_baseline count 100  # Create baseline for specific benchmark with custom runs
+.benchmark_show                # Display saved baseline comparison table
 ```
 
 When running benchmarks, the system automatically compares results against:
 - The current version's baseline (if available)
 - Last 3 patch versions (e.g., 4.12.0, 4.12.1, 4.12.2)
-- Previous minor version (e.g., 4.11.x)
+- Latest version from up to 2 previous minor versions (e.g., 4.11.5, 4.10.5)
 
-The `.benchmark_all` command displays a comprehensive summary table showing performance across versions with color-coded differences:
-- 🟢 Green = Performance improvement
-- 🔵 Blue = Minimal change (±5%)
-- 🟡 Yellow = Small regression (5-15%)
-- 🔴 Red = Significant regression (>15%)
+Both `.benchmark_all` and `.benchmark_show` display comprehensive summary tables showing performance across versions with color-coded differences:
+- 🟢 Green = Performance improvement (>1ms or >5% faster)
+- 🔵 Blue = Minimal change (≤1ms or ≤5%)
+- 🟡 Yellow = Small regression (1-2ms or 5-15% slower)
+- 🔴 Red = Significant regression (>2ms or >15% slower)
 
 **Adding Custom Benchmarks:**
 
@@ -255,22 +260,28 @@ Stop and restart the app then run it with `.run my_scenario`
 - 45+ comprehensive benchmark scenarios covering various query patterns
 - Multi-field index benchmarks for compound query optimization
 - Graceful handling of unsupported features across different Ditto versions
+- Progress tracking shows current benchmark number (e.g., "Running benchmark (40/48)")
 
 ### Improved User Experience
 - Configurable run counts for all benchmark commands
+- Individual baseline creation with `.benchmark_baseline <name> [runs]`
+- `.benchmark_show` command to view saved baselines without running benchmarks
 - Batch overwrite options when creating baselines (yes/no to all)
 - Color-coded performance indicators for easy interpretation
-- Table-based summary view for cross-version comparisons
+- Table-based summary view for cross-version comparisons (up to 7 versions)
 
 ### Version Compatibility
 - Automatic version detection and feature compatibility checks
 - DQL_STRICT_MODE automatically enabled only for Ditto 4.11.0+
+- COLLECTION schema syntax for older Ditto versions (<4.11.0)
 - Baseline comparisons work seamlessly across different SDK versions
+- Shows latest version from up to 2 previous minor versions
 
 ### Error Handling
 - Benchmarks continue running even if individual queries fail
 - Unsupported features are marked as "N/A" instead of stopping execution
 - Cleanup queries run even after benchmark failures
+- TypeScript error handling for unknown error types
 
 ## License
 
