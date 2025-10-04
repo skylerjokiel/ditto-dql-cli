@@ -214,6 +214,32 @@ Edit `benchmarks.json` to add new benchmark queries:
 
 Perfect for comparing indexed vs non-indexed query performance and maintaining consistent performance testing!
 
+## Benchmark Hardware Context
+
+All benchmark results in this repository were collected on the following system:
+
+```
+System Information:
+  Platform: darwin arm64
+  OS Release: 24.6.0  
+
+CPU Information:
+  Model: Apple M1 Max
+  Cores: 10
+```
+
+**Important Notes:**
+- Benchmark results are highly dependent on hardware specifications
+- Your results will vary based on CPU, memory, storage type, and system load
+- Use relative performance comparisons (between versions) rather than absolute times
+- The `.system` command shows your current hardware specifications for reference
+
+When sharing benchmark results or comparing performance:
+- Always include your system specifications (use `.system` command)
+- Focus on percentage changes between versions rather than absolute timings
+- Consider running multiple benchmark iterations to account for system variance
+- Be aware that different CPU architectures (Intel vs ARM) will show different baseline performance
+
 ## System Information
 
 The `.system` command provides comprehensive information about your environment:
@@ -287,33 +313,41 @@ To add a new scenario, edit `scenarios.json` and add your queries with optional 
 
 Stop and restart the app then run it with `.run my_scenario`
 
-## Recent Features
+## Key Features
 
-### Enhanced Benchmark Suite
-- 45+ comprehensive benchmark scenarios covering various query patterns
-- Multi-field index benchmarks for compound query optimization
-- Graceful handling of unsupported features across different Ditto versions
+### Comprehensive Benchmark Suite
+- 45+ benchmark scenarios covering various query patterns and optimizations
+- Multi-field index benchmarks for compound query testing
+- INSERT, UPDATE, DELETE operations with proper cleanup
+- Text search, range queries, aggregations, and sorting benchmarks
 - Progress tracking shows current benchmark number (e.g., "Running benchmark (40/48)")
 
-### Improved User Experience
-- Configurable run counts for all benchmark commands
+### Performance Baseline Tracking
+- Create and save performance baselines across Ditto versions
 - Individual baseline creation with `.benchmark_baseline <name> [runs]`
-- `.benchmark_show` command to view saved baselines without running benchmarks
-- Batch overwrite options when creating baselines (yes/no to all)
+- Compare current performance against historical baselines
 - Color-coded performance indicators for easy interpretation
 - Table-based summary view for cross-version comparisons (up to 7 versions)
+- `.benchmark_show` command to view saved baselines without running benchmarks
 
-### Version Compatibility
+### Flexible Data Export
+- Export any query results to NDJSON format with `.export <query>`
+- Timestamped filenames prevent overwrites
+- Organized in `exports/` directory (git-ignored)
+- Perfect for data analysis, backup, or sharing
+
+### Version Compatibility & Auto-Setup
 - Automatic version detection and feature compatibility checks
 - DQL_STRICT_MODE automatically enabled only for Ditto 4.11.0+
+- USER_COLLECTION_SYNC_SCOPES for Ditto 4.10.0+
 - COLLECTION schema syntax for older Ditto versions (<4.11.0)
-- Baseline comparisons work seamlessly across different SDK versions
-- Shows latest version from up to 2 previous minor versions
+- Auto-import of movies and baseline data on first run
 
-### Error Handling
+### Robust Error Handling
 - Benchmarks continue running even if individual queries fail
 - Unsupported features are marked as "N/A" instead of stopping execution
 - Cleanup queries run even after benchmark failures
+- Graceful degradation for older Ditto versions
 - TypeScript error handling for unknown error types
 
 ## License
