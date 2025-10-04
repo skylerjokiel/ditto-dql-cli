@@ -1,6 +1,6 @@
 # Ditto DQL Terminal
 
-A simple command-line interface for running DQL queries against a Ditto database with a movie dataset.
+A comprehensive command-line interface for running DQL queries against a Ditto database with a movie dataset, featuring performance benchmarking and baseline tracking capabilities.
 
 > This application is designed for local DQL query execution and **does not enable sync** intentionally.
 
@@ -31,8 +31,10 @@ The terminal will automatically import the movie dataset on first run.
 - `.all` - Run all scenarios in sequence with comprehensive summary
 - `.bench <query>` - Benchmark a custom query (20 runs with statistics)
 - `.benchmarks` - List all available predefined benchmarks
-- `.benchmark <name|index>` - Run a specific predefined benchmark
-- `.benchmark_all` - Run all predefined benchmarks
+- `.benchmark <name|index> [runs]` - Run a specific predefined benchmark with optional run count (default: 5)
+- `.benchmark_all [runs]` - Run all predefined benchmarks with optional run count
+- `.benchmark_baseline [runs]` - Run all benchmarks and save results as performance baselines (default: 50 runs)
+- `.system` - Display comprehensive system information including Ditto version, hardware details, and database statistics
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -159,8 +161,48 @@ The application includes predefined benchmark suites for common query patterns:
 .benchmarks                    # List all available benchmarks
 .benchmark count               # Run the "count" benchmark  
 .benchmark 1                   # Run benchmark by index
+.benchmark count 10            # Run benchmark with custom run count
 .benchmark_all                 # Run all predefined benchmarks
+.benchmark_all 10              # Run all benchmarks with 10 runs each
 ```
+
+### Performance Baseline Tracking
+
+Track performance changes across Ditto versions using the baseline system:
+
+```
+.benchmark_baseline            # Create baseline for current version (50 runs)
+.benchmark_baseline 100        # Create baseline with custom run count
+```
+
+When running benchmarks, the system automatically compares results against:
+- The current version's baseline (if available)
+- Last 3 patch versions (e.g., 4.12.0, 4.12.1, 4.12.2)
+- Previous minor version (e.g., 4.11.x)
+
+The `.benchmark_all` command displays a comprehensive summary table showing performance across versions with color-coded differences:
+- 🟢 Green = Performance improvement
+- 🔵 Blue = Minimal change (±5%)
+- 🟡 Yellow = Small regression (5-15%)
+- 🔴 Red = Significant regression (>15%)
+
+### Multi-Version Baseline Collection
+
+For comprehensive performance testing across multiple Ditto versions:
+
+```bash
+# Collect baselines for all configured versions
+npm run collect-baselines
+
+# Collect baseline for a specific version
+npm run collect-baselines -- 4.12.0
+```
+
+This automated tool:
+- Switches between Ditto versions automatically
+- Runs all benchmarks for each version
+- Saves results to the baseline database
+- Restores your original Ditto version when complete
 
 **Adding Custom Benchmarks:**
 
@@ -169,12 +211,34 @@ Edit `benchmarks.json` to add new benchmark queries:
 ```json
 {
   "my_benchmark": {
-    "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100"
+    "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
+    "preQueries": ["CREATE INDEX IF NOT EXISTS runtime_idx ON movies (runtime)"],
+    "postQueries": ["DROP INDEX IF EXISTS runtime_idx ON movies"]
   }
 }
 ```
 
 Perfect for comparing indexed vs non-indexed query performance and maintaining consistent performance testing!
+
+## System Information
+
+The `.system` command provides comprehensive information about your environment:
+
+```
+.system
+```
+
+This displays:
+- **Ditto SDK Version**: Current version and license information
+- **System Information**: OS, platform, CPU, memory details
+- **Storage Information**: Database location and size
+- **Database Statistics**: Document counts, index information, and collection details
+
+Use this information to:
+- Ensure consistent testing environments
+- Debug performance differences
+- Track database growth
+- Verify index usage
 
 ## Adding New Scenarios
 
@@ -202,6 +266,29 @@ To add a new scenario, edit `scenarios.json` and add your queries with optional 
 ```
 
 Stop and restart the app then run it with `.run my_scenario`
+
+## Recent Features
+
+### Enhanced Benchmark Suite
+- 45+ comprehensive benchmark scenarios covering various query patterns
+- Multi-field index benchmarks for compound query optimization
+- Graceful handling of unsupported features across different Ditto versions
+
+### Improved User Experience
+- Configurable run counts for all benchmark commands
+- Batch overwrite options when creating baselines (yes/no to all)
+- Color-coded performance indicators for easy interpretation
+- Table-based summary view for cross-version comparisons
+
+### Version Compatibility
+- Automatic version detection and feature compatibility checks
+- DQL_STRICT_MODE automatically enabled only for Ditto 4.11.0+
+- Baseline comparisons work seamlessly across different SDK versions
+
+### Error Handling
+- Benchmarks continue running even if individual queries fail
+- Unsupported features are marked as "N/A" instead of stopping execution
+- Cleanup queries run even after benchmark failures
 
 ## License
 

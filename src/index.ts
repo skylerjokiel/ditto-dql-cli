@@ -81,6 +81,15 @@ function compareVersions(a: string, b: string): number {
   return vB.patch - vA.patch;
 }
 
+function isVersionAtLeast(version: string, minMajor: number, minMinor: number, minPatch: number = 0): boolean {
+  const v = parseVersion(version);
+  if (v.major > minMajor) return true;
+  if (v.major < minMajor) return false;
+  if (v.minor > minMinor) return true;
+  if (v.minor < minMinor) return false;
+  return v.patch >= minPatch;
+}
+
 async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Promise<BenchmarkBaseline | null> {
   try {
     const result = await ditto.store.execute(
@@ -340,8 +349,13 @@ async function main() {
     config.connect.websocketURLs.push('wss://i83inp.cloud.dittolive.app');
   });
 
-  // Uses the new DQL Document Schema mode where type definitions are not required 
-  await ditto.store.execute("ALTER SYSTEM SET DQL_STRICT_MODE = false");
+  // Uses the new DQL Document Schema mode where type definitions are not required (4.11.0+)
+  const dittoVersion = await getDittoVersion();
+  if (isVersionAtLeast(dittoVersion, 4, 11, 0)) {
+    await ditto.store.execute("ALTER SYSTEM SET DQL_STRICT_MODE = false");
+  } else {
+    console.warn("DQL_STRICT_MODE = true because running version is <4.11.0");
+  }
 
   // Restrict `movies` collection to be local only 
   const syncScopes = {
@@ -690,28 +704,60 @@ async function main() {
         console.log(`\n${applyColor(`Baseline Comparisons (current: v${dittoVersion})`, 'blue')}`);
         console.log(`${applyColor('─'.repeat(50), 'blue')}`);
         
-        const formatDiff = (diff: number) => {
-          const sign = diff >= 0 ? '+' : '';
-          const color = Math.abs(diff) < 5 ? 'green' : Math.abs(diff) < 15 ? 'yellow_highlight' : 'red';
-          return applyColor(`${sign}${diff.toFixed(1)}%`, color);
+        const formatDiff = (current: number, baseline: number) => {
+          const percentDiff = ((current - baseline) / baseline) * 100;
+          const absoluteDiff = current - baseline;
+          const sign = percentDiff >= 0 ? '+' : '';
+          
+          // Color based on performance impact (matching table format)
+          let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+          if (baseline < 10) {
+            // For fast queries, use absolute difference
+            if (Math.abs(absoluteDiff) < 1) {
+              color = 'blue';
+            } else if (absoluteDiff < 0) {
+              color = 'green';
+            } else if (absoluteDiff < 2) {
+              color = 'yellow_highlight';
+            } else {
+              color = 'red';
+            }
+          } else {
+            // For slow queries, use percentage
+            if (Math.abs(percentDiff) < 5) {
+              color = 'blue';
+            } else if (percentDiff < 0) {
+              color = 'green';
+            } else if (percentDiff < 15) {
+              color = 'yellow_highlight';
+            } else {
+              color = 'red';
+            }
+          }
+          
+          return applyColor(`${sign}${percentDiff.toFixed(1)}%`, color);
         };
         
-        // Show current version baseline first if it exists
+        // Collect all baselines for display
+        const allBaselines: BenchmarkBaseline[] = [];
         if (currentBaseline) {
-          const meanDiff = ((mean - currentBaseline.metrics.mean) / currentBaseline.metrics.mean) * 100;
-          console.log(`  vs v${currentBaseline._id.ditto_version} baseline: ${formatDiff(meanDiff)} (${currentBaseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
+          allBaselines.push(currentBaseline);
         }
+        allBaselines.push(...comparisonBaselines);
         
-        // Show other version comparisons
-        if (comparisonBaselines.length > 0) {
-          comparisonBaselines.forEach((baseline, index) => {
-            const meanDiff = ((mean - baseline.metrics.mean) / baseline.metrics.mean) * 100;
-            const versionType = index < 3 ? 'patch' : 'minor';
-            console.log(`  vs v${baseline._id.ditto_version} (${versionType}): ${formatDiff(meanDiff)} (${baseline.metrics.mean.toFixed(1)}ms → ${mean.toFixed(1)}ms)`);
-          });
-        } else if (currentBaseline) {
-          console.log(`  No other versions available for comparison`);
-        }
+        // Sort by version (current first, then by version number descending)
+        allBaselines.sort((a, b) => {
+          if (a._id.ditto_version === dittoVersion) return -1;
+          if (b._id.ditto_version === dittoVersion) return 1;
+          return compareVersions(a._id.ditto_version, b._id.ditto_version);
+        });
+        
+        // Show all version comparisons
+        allBaselines.forEach((baseline) => {
+          const isCurrent = baseline._id.ditto_version === dittoVersion;
+          const versionLabel = isCurrent ? `v${baseline._id.ditto_version} (current baseline)` : `v${baseline._id.ditto_version}`;
+          console.log(`  ${versionLabel}: ${baseline.metrics.mean.toFixed(1)}ms ${formatDiff(mean, baseline.metrics.mean)} (→ ${mean.toFixed(1)}ms)`);
+        });
       } else {
         console.log(`\n${applyColor('No baselines found for comparison', 'yellow_highlight')}`);
         console.log(`Create baselines with '.benchmark_baseline' first`);
@@ -1041,10 +1087,12 @@ async function main() {
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
           
           let skippedBenchmarks = 0;
+          let benchmarkIndex = 0;
           
           for (const benchmarkName of benchmarkKeys) {
+            benchmarkIndex++;
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
-            console.log(`${applyColor(`Running benchmark: ${benchmarkName}`, 'blue')}`);
+            console.log(`${applyColor(`Running benchmark (${benchmarkIndex}/${benchmarkKeys.length}): ${benchmarkName}`, 'blue')}`);
             
             try {
               // Run pre-queries if they exist
@@ -1351,12 +1399,14 @@ async function main() {
           console.log(`Runs per baseline: ${runCount}\n`);
           
           let skippedBaselines = 0;
+          let benchmarkIndex = 0;
           
           for (const benchmarkName of benchmarkKeys) {
+            benchmarkIndex++;
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
             
-            console.log(`${applyColor(`Creating baseline: ${benchmarkName}`, 'blue')}`);
+            console.log(`${applyColor(`Creating baseline (${benchmarkIndex}/${benchmarkKeys.length}): ${benchmarkName}`, 'blue')}`);
             console.log(`Hash: ${hash}`);
             
             try {
