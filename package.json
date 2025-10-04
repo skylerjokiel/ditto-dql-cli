@@ -7,8 +7,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "collect-baselines": "node collect-baselines.js"
+    "dev": "tsx src/index.ts"
   },
   "author": "",
   "license": "ISC",

@@ -186,24 +186,6 @@ The `.benchmark_all` command displays a comprehensive summary table showing perf
 - 🟡 Yellow = Small regression (5-15%)
 - 🔴 Red = Significant regression (>15%)
 
-### Multi-Version Baseline Collection
-
-For comprehensive performance testing across multiple Ditto versions:
-
-```bash
-# Collect baselines for all configured versions
-npm run collect-baselines
-
-# Collect baseline for a specific version
-npm run collect-baselines -- 4.12.0
-```
-
-This automated tool:
-- Switches between Ditto versions automatically
-- Runs all benchmarks for each version
-- Saves results to the baseline database
-- Restores your original Ditto version when complete
-
 **Adding Custom Benchmarks:**
 
 Edit `benchmarks.json` to add new benchmark queries:
