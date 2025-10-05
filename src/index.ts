@@ -1,4 +1,4 @@
-import { init, Ditto } from '@dittolive/ditto';
+import { init, Ditto, Logger as DittoLogger, LogLevel, CustomLogCallback } from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -7,6 +7,139 @@ import * as crypto from 'crypto';
 
 import scenarios from "../scenarios.json"
 import benchmarks from "../benchmarks.json"
+
+// Setup auto-logging with circular buffer
+DittoLogger.enabled = true;
+DittoLogger.minimumLogLevel = 'Info';
+const levelNames: Record<LogLevel, string> = {
+  'Error': 'ERROR',
+  'Warning': 'WARN', 
+  'Info': 'INFO',
+  'Debug': 'DEBUG',
+  'Verbose': 'VERBOSE'
+};
+
+const customLogger: CustomLogCallback = (logLevel: LogLevel, message: string) => {
+  const level = levelNames[logLevel] || 'UNKNOWN';
+  const logEntry: LogEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    logLevel
+  };
+  
+  // Add to circular buffer
+  logBuffer.add(logEntry);
+  
+  // Export logs on warnings and errors
+  if (logLevel === 'Error' || logLevel === 'Warning') {
+    exportLogsOnError().catch(error => {
+      console.error('Failed to export logs on error:', error);
+    });
+  }
+};
+await DittoLogger.setCustomLogCallback(customLogger);
+
+// Circular buffer for log storage
+class CircularBuffer<T> {
+  private buffer: T[] = [];
+  private maxSize: number;
+  private currentIndex: number = 0;
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize;
+  }
+
+  add(item: T): void {
+    if (this.buffer.length < this.maxSize) {
+      this.buffer.push(item);
+    } else {
+      this.buffer[this.currentIndex] = item;
+      this.currentIndex = (this.currentIndex + 1) % this.maxSize;
+    }
+  }
+
+  getAll(): T[] {
+    if (this.buffer.length < this.maxSize) {
+      return [...this.buffer];
+    }
+    return [
+      ...this.buffer.slice(this.currentIndex),
+      ...this.buffer.slice(0, this.currentIndex)
+    ];
+  }
+
+  clear(): void {
+    this.buffer = [];
+    this.currentIndex = 0;
+  }
+}
+
+type LogEntry = {
+  timestamp: string;
+  level: string;
+  message: string;
+  logLevel: LogLevel;
+};
+
+const logBuffer = new CircularBuffer<LogEntry>(100);
+
+async function exportLogsOnError(): Promise<void> {
+  try {
+    const logsDir = path.join(process.cwd(), 'logs');
+    
+    // Create logs directory if it doesn't exist
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    const logs = logBuffer.getAll();
+    if (logs.length === 0) {
+      return;
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `error-logs-${timestamp}.ndjson`;
+    const filepath = path.join(logsDir, filename);
+    
+    const logData = logs.map(log => JSON.stringify(log)).join('\n');
+    fs.writeFileSync(filepath, logData);
+    
+    console.log(`\n${applyColor('📋 Logs exported:', 'yellow_highlight')} ${filename}`);
+    console.log(`   Location: ${filepath}`);
+    console.log(`   Entries: ${logs.length}`);
+  } catch (error) {
+    console.error('Failed to export logs:', error);
+  }
+}
+
+async function manualLogDump(): Promise<void> {
+  try {
+    const logsDir = path.join(process.cwd(), 'logs');
+    
+    // Create logs directory if it doesn't exist
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    const logs = logBuffer.getAll();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `manual-logs-${timestamp}.ndjson`;
+    const filepath = path.join(logsDir, filename);
+    
+    const logData = logs.length > 0 ? logs.map(log => JSON.stringify(log)).join('\n') : '';
+    fs.writeFileSync(filepath, logData);
+    
+    console.log(`\n${applyColor('📋 Log buffer dumped:', 'green')} ${filename}`);
+    console.log(`   Location: ${filepath}`);
+    console.log(`   Entries: ${logs.length}`);
+    if (logs.length === 0) {
+      console.log(`   ${applyColor('Note:', 'blue')} Buffer was empty`);
+    }
+  } catch (error) {
+    console.error('Failed to dump logs:', error);
+  }
+}
 
 type ScenarioQuery = string | {
   query: string;
@@ -940,6 +1073,8 @@ async function main() {
       console.log('  .benchmark_show - Show saved baseline comparison table');
       console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .export <query> - Export query results to exports/export_<timestamp>.ndjson');
+      console.log('  .log_dump - Export current log buffer to logs/manual-logs_<timestamp>.ndjson');
+      console.log('  .log_debug - Show log buffer debug information');
       console.log('  .exit    - Exit the DQL terminal');
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
@@ -1468,7 +1603,7 @@ async function main() {
         }
         else if (input.toLowerCase().startsWith('.benchmark_baseline')) {
           const args = input.split(' ');
-          let benchmarkArg = args[1];
+          let benchmarkArg: string | undefined = args[1];
           let runCount = 50;
           
           // Check if first arg is a number (run count for all) or benchmark name
@@ -1913,6 +2048,22 @@ async function main() {
         }
         else if (input.toLowerCase() === '.system') {
           await showSystemInfo();
+        }
+        else if (input.toLowerCase() === '.log_dump') {
+          await manualLogDump();
+        }
+        else if (input.toLowerCase() === '.log_debug') {
+          const logs = logBuffer.getAll();
+          console.log(`\n${applyColor('Log Buffer Debug Info:', 'blue')}`);
+          console.log(`  Buffer size: ${logs.length}/100`);
+          console.log(`  Logger enabled: ${DittoLogger.enabled}`);
+          console.log(`  Minimum log level: ${DittoLogger.minimumLogLevel}`);
+          if (logs.length > 0) {
+            console.log(`  Latest log: ${logs[logs.length - 1].level} - ${logs[logs.length - 1].message.substring(0, 100)}`);
+            console.log(`  Oldest log: ${logs[0].level} - ${logs[0].message.substring(0, 100)}`);
+          } else {
+            console.log(`  ${applyColor('No logs in buffer', 'yellow_highlight')}`);
+          }
         }
         else {
           await executeDql(input, undefined, undefined, undefined, true, rl);
