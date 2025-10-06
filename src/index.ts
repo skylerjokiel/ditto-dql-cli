@@ -288,7 +288,6 @@ async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<
 
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
-  const baseDir = process.env.INIT_CWD || process.cwd();
   const filePath = path.join(baseDir, docName);
   
   if (!fs.existsSync(filePath)) {
@@ -357,7 +356,6 @@ async function importMovies(ditto: Ditto) {
 
 async function importBaselines(ditto: Ditto) {
   const docName = 'benchmark_baselines.ndjson';
-  const baseDir = process.env.INIT_CWD || process.cwd();
   const filePath = path.join(baseDir, docName);
   
   if (!fs.existsSync(filePath)) {
@@ -1191,7 +1189,7 @@ async function main() {
   console.log(applyColor(topBorder, 'blue'));
   console.log(centerText(''));
   console.log(centerText(applyColor('Ditto DQL CLI', 'blue')));
-  console.log(centerText(`v0.1.0 · Ditto SDK ${dittoVersion}`));
+  console.log(centerText(`v0.1.2 · Ditto SDK ${dittoVersion}`));
   console.log(centerText(''));
   console.log(centerText(applyColor(`Collections`, 'blue')));
   console.log(centerText(`movies (${moviesTotal.toLocaleString()} docs)`));
