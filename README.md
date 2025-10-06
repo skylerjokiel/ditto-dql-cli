@@ -2,6 +2,8 @@
 
 A comprehensive command-line interface for running DQL queries against a Ditto database with a movie dataset, featuring performance benchmarking and baseline tracking capabilities.
 
+> **Tested with Ditto SDK versions 4.8 to 4.12**
+
 > This application is designed for local DQL query execution and **does not enable sync** intentionally.
 
 > To reset the database stop the application and delete the `./ditto` directory from the root.
