@@ -1,5 +1,5 @@
 {
-  "name": "ditto-dql-terminal",
+  "name": "dql-cli",
   "version": "0.1.0",
   "description": "A comprehensive CLI for running DQL queries against Ditto databases with benchmarking and performance tracking",
   "main": "dist/index.js",
@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/skylerjokiel/ditto-dql-terminal.git"
+    "url": "https://github.com/skylerjokiel/dql-cli.git"
   },
   "keywords": [
     "ditto",
@@ -41,9 +41,9 @@
     "README.md",
     "LICENSE"
   ],
-  "homepage": "https://github.com/skylerjokiel/ditto-dql-terminal#readme",
+  "homepage": "https://github.com/skylerjokiel/dql-cli#readme",
   "bugs": {
-    "url": "https://github.com/skylerjokiel/ditto-dql-terminal/issues"
+    "url": "https://github.com/skylerjokiel/dql-cli/issues"
   },
   "dependencies": {
     "@dittolive/ditto": "^4.12.2",

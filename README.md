@@ -1,4 +1,4 @@
-# Ditto DQL Terminal
+# DQL CLI
 
 A comprehensive command-line interface for running DQL queries against a Ditto database with a movie dataset, featuring performance benchmarking and baseline tracking capabilities.
 
@@ -10,13 +10,13 @@ A comprehensive command-line interface for running DQL queries against a Ditto d
 
 ### Global Installation (Recommended)
 ```bash
-npm install -g ditto-dql-terminal
+npm install -g dql-cli
 dql
 ```
 
 ### Using npx (No Installation)
 ```bash
-npx ditto-dql-terminal
+npx dql-cli
 ```
 
 ### Running with Specific Ditto Version
@@ -29,8 +29,8 @@ dql --help         # Show usage information
 
 ### From Source
 ```bash
-git clone https://github.com/skylerjokiel/ditto-dql-terminal.git
-cd ditto-dql-terminal
+git clone https://github.com/skylerjokiel/dql-cli.git
+cd dql-cli
 npm install
 npm run dev
 ```
