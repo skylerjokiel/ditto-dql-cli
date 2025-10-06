@@ -1054,6 +1054,7 @@ async function main() {
 
   console.log('Ditto DQL Terminal');
   console.log(`Ditto SDK Version: ${applyColor(dittoVersion, 'green')}`);
+  console.log(`\nType ${applyColor('.help', 'blue')} for available commands`);
 
   rl.prompt();
 
