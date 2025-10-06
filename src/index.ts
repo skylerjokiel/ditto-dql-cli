@@ -219,6 +219,12 @@ function compareVersions(a: string, b: string): number {
   const vA = parseVersion(a);
   const vB = parseVersion(b);
   
+  // If either version couldn't be parsed (non-standard semver), sort alphabetically
+  if ((vA.major === 0 && vA.minor === 0 && vA.patch === 0) || 
+      (vB.major === 0 && vB.minor === 0 && vB.patch === 0)) {
+    return b.localeCompare(a); // Reverse alphabetical for consistency with version sorting
+  }
+  
   if (vA.major !== vB.major) return vB.major - vA.major;
   if (vA.minor !== vB.minor) return vB.minor - vA.minor;
   return vB.patch - vA.patch;
@@ -1413,11 +1419,11 @@ async function main() {
           console.log(`${applyColor('BENCHMARK SUMMARY', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
           
-          // Sort versions (current first, then alphabetically) - show ALL versions
+          // Sort versions (current first, then by semver descending) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
-            return a.localeCompare(b);
+            return compareVersions(a, b);
           });
           
           // Show all versions (no limit)
@@ -1842,11 +1848,11 @@ async function main() {
           console.log(`${applyColor('SAVED BASELINES', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
           
-          // Sort versions (current first, then alphabetically) - show ALL versions
+          // Sort versions (current first, then by semver descending) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
-            return a.localeCompare(b);
+            return compareVersions(a, b);
           });
           
           // Show all versions (no limit)
