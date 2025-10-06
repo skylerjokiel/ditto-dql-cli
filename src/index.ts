@@ -191,7 +191,7 @@ function generateBenchmarkHash(preQueries: string[] = [], query: string): string
 
 async function getDittoVersion(): Promise<string> {
   try {
-    const dittoPackagePath = path.join(process.cwd(), 'node_modules', '@dittolive', 'ditto', 'package.json');
+    const dittoPackagePath = path.join(baseDir, 'node_modules', '@dittolive', 'ditto', 'package.json');
     if (fs.existsSync(dittoPackagePath)) {
       const packageJson = JSON.parse(fs.readFileSync(dittoPackagePath, 'utf8'));
       return packageJson.version;
@@ -1189,7 +1189,7 @@ async function main() {
   console.log(applyColor(topBorder, 'blue'));
   console.log(centerText(''));
   console.log(centerText(applyColor('Ditto DQL CLI', 'blue')));
-  console.log(centerText(`v0.1.2 · Ditto SDK ${dittoVersion}`));
+  console.log(centerText(`v0.1.3 · Ditto SDK ${dittoVersion}`));
   console.log(centerText(''));
   console.log(centerText(applyColor(`Collections`, 'blue')));
   console.log(centerText(`movies (${moviesTotal.toLocaleString()} docs)`));

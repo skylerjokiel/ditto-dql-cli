@@ -96,8 +96,8 @@ async function main() {
           stdio: 'inherit',
           env: {
             ...process.env,
-            // Ensure the app runs from the original directory for data files
-            INIT_CWD: process.cwd()
+            // Point to the temp directory where files are copied
+            INIT_CWD: tmpDir
           }
         });
         
