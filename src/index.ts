@@ -259,46 +259,11 @@ async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion
     if (result.items.length === 0) return [];
     
     const allBaselines = result.items.map(item => item.value as BenchmarkBaseline);
-    const currentParsed = parseVersion(currentVersion);
     
-    // Filter out current version and sort by version descending
-    const otherVersions = allBaselines
+    // Return ALL baselines except current version, sorted alphabetically
+    return allBaselines
       .filter(baseline => baseline._id.ditto_version !== currentVersion)
-      .sort((a, b) => compareVersions(a._id.ditto_version, b._id.ditto_version));
-    
-    const comparisons: BenchmarkBaseline[] = [];
-    
-    // Get last 3 patches from same major.minor
-    const sameMinorVersions = otherVersions.filter(baseline => {
-      const parsed = parseVersion(baseline._id.ditto_version);
-      return parsed.major === currentParsed.major && parsed.minor === currentParsed.minor;
-    });
-    comparisons.push(...sameMinorVersions.slice(0, 3));
-    
-    // Get latest from each previous minor version (same major)
-    const previousMinorVersions = otherVersions.filter(baseline => {
-      const parsed = parseVersion(baseline._id.ditto_version);
-      return parsed.major === currentParsed.major && parsed.minor < currentParsed.minor;
-    });
-    
-    // Group by minor version and get the latest from each
-    const minorGroups = new Map<number, BenchmarkBaseline>();
-    previousMinorVersions.forEach(baseline => {
-      const parsed = parseVersion(baseline._id.ditto_version);
-      const existing = minorGroups.get(parsed.minor);
-      if (!existing || compareVersions(existing._id.ditto_version, baseline._id.ditto_version) > 0) {
-        minorGroups.set(parsed.minor, baseline);
-      }
-    });
-    
-    // Add them in descending minor version order
-    const sortedMinors = Array.from(minorGroups.keys()).sort((a, b) => b - a);
-    sortedMinors.slice(0, 2).forEach(minor => {
-      const baseline = minorGroups.get(minor);
-      if (baseline) comparisons.push(baseline);
-    });
-    
-    return comparisons;
+      .sort((a, b) => a._id.ditto_version.localeCompare(b._id.ditto_version));
   } catch (error) {
     return [];
   }
@@ -1448,15 +1413,15 @@ async function main() {
           console.log(`${applyColor('BENCHMARK SUMMARY', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
           
-          // Sort versions (current first, then by version number descending)
+          // Sort versions (current first, then alphabetically) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
-            return compareVersions(a, b);
+            return a.localeCompare(b);
           });
           
-          // Limit to 7 most recent versions for table width
-          const displayVersions = sortedVersions.slice(0, 7);
+          // Show all versions (no limit)
+          const displayVersions = sortedVersions;
           
           // Generate table header
           console.log('Benchmark Name                 ' + displayVersions.map(v => {
@@ -1877,15 +1842,15 @@ async function main() {
           console.log(`${applyColor('SAVED BASELINES', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
           
-          // Sort versions (current first, then by version number descending)
+          // Sort versions (current first, then alphabetically) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
-            return compareVersions(a, b);
+            return a.localeCompare(b);
           });
           
-          // Limit to 7 most recent versions for table width
-          const displayVersions = sortedVersions.slice(0, 7);
+          // Show all versions (no limit)
+          const displayVersions = sortedVersions;
           
           // Generate table header
           console.log('Benchmark Name                 ' + displayVersions.map(v => {
