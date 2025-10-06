@@ -134,6 +134,22 @@
             "expectedIndex": "full_scan"
         }
     ],
+    "index_with_missing_field": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        "INSERT INTO movies DOCUMENTS(deserialize_json('{\"_id\":\"cb045f61-c0bb-4ba8-ad12-8ae8a4ba061d\"}'))",
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_rated on movies (rated)",
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "movies_rated"
+        },
+        "EVICT FROM movies WHERE _id = 'cb045f61-c0bb-4ba8-ad12-8ae8a4ba061d'"
+    ],
     "validation_test": [
         {
             "query": "SELECT * FROM movies WHERE rated = 'PG' LIMIT 5",
