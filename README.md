@@ -12,13 +12,13 @@ A comprehensive command-line interface for running DQL queries against a Ditto d
 
 ### Global Installation (Recommended)
 ```bash
-npm install -g dql-cli
+npm install -g ditto-dql-cli
 dql
 ```
 
 ### Using npx (No Installation)
 ```bash
-npx dql-cli
+npx ditto-dql-cli
 ```
 
 ### Running with Specific Ditto Version
@@ -31,8 +31,8 @@ dql --help         # Show usage information
 
 ### From Source
 ```bash
-git clone https://github.com/skylerjokiel/dql-cli.git
-cd dql-cli
+git clone https://github.com/skylerjokiel/ditto-dql-cli.git
+cd ditto-dql-cli
 npm install
 npm run dev
 ```

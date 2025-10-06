@@ -1,6 +1,6 @@
 {
   "name": "ditto-dql-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A comprehensive CLI for running DQL queries against Ditto databases with benchmarking and performance tracking",
   "main": "dist/index.js",
   "type": "module",
