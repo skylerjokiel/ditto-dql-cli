@@ -55,6 +55,7 @@ The terminal will automatically import the movie dataset on first run. If a `ben
 - `.benchmark_show` - Display saved baseline comparison table
 - `.system` - Display comprehensive system information including Ditto version, hardware details, and database statistics
 - `.export <query>` - Export query results to `exports/export_<timestamp>.ndjson` file
+- `.generate_movies <count>` - Generate and insert random movies into the collection
 - `.log_dump` - Export current log buffer to `logs/manual-logs_<timestamp>.ndjson` file
 - `.log_debug` - Show log buffer debug information (buffer size, latest logs)
 - `.exit` - Exit the terminal
@@ -361,6 +362,41 @@ NDJSON format is ideal for:
 - Importing into other systems
 - Analysis with tools like `jq` or custom scripts
 - Version control of dataset snapshots
+
+## Generate Random Movies
+
+Create and insert randomly generated movies for testing at scale:
+
+```
+.generate_movies 1000        # Generate 1,000 random movies
+.generate_movies 50000       # Generate 50,000 random movies
+.generate_movies 1000000     # Generate 1 million movies (with confirmation prompt)
+```
+
+The generate_movies command:
+- Creates realistic movie documents with all required fields
+- Uses "random-" prefix for all generated movie IDs
+- Shows real-time progress during insertion
+- Benchmarks performance (movies/second insertion rate)
+- Displays total collection count after completion
+- Warns and requires confirmation for counts over 100,000
+
+Generated movies include:
+- Random titles combining adjectives and nouns (e.g., "Epic Adventure", "Mysterious Journey")
+- Years ranging from 1920-2024
+- Multiple genres (Action, Comedy, Drama, etc.)
+- Cast and director names
+- MPAA ratings (G, PG, PG-13, R, etc.)
+- IMDB ratings and votes
+- Rotten Tomatoes scores (when applicable)
+- Runtime between 60-180 minutes
+- Awards and nominations
+
+Perfect for:
+- Performance testing with larger datasets
+- Query optimization testing at scale
+- Benchmarking different data volumes
+- Stress testing Ditto operations
 
 ## Adding New Scenarios
 

@@ -437,6 +437,142 @@ function extractIndexInfo(explainResult: any): string | null {
   }
 }
 
+function generateRandomMovie(index: number): any {
+  const adjectives = ['Amazing', 'Mysterious', 'Thrilling', 'Epic', 'Legendary', 'Dark', 'Bright', 'Silent', 'Loud', 'Quick'];
+  const nouns = ['Adventure', 'Journey', 'Quest', 'Mystery', 'Story', 'Legend', 'Tale', 'Saga', 'Chronicle', 'Odyssey'];
+  const genres = ['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance', 'Thriller', 'Documentary', 'Animation', 'Fantasy'];
+  const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily', 'Robert', 'Lisa', 'James', 'Mary'];
+  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+  const countries = ['USA', 'UK', 'Canada', 'France', 'Germany', 'Italy', 'Spain', 'Japan', 'Australia', 'Mexico'];
+  const ratings = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'UNRATED', 'APPROVED', 'NOT RATED'];
+  
+  const randomFrom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+  const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const randomFloat = (min: number, max: number, decimals: number = 1) => 
+    parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
+  
+  const year = randomInt(1920, 2024).toString();
+  const title = `${randomFrom(adjectives)} ${randomFrom(nouns)}`;
+  const runtime = randomInt(60, 180);
+  
+  // Generate random cast
+  const castSize = randomInt(2, 5);
+  const cast = Array.from({ length: castSize }, () => 
+    `${randomFrom(firstNames)} ${randomFrom(lastNames)}`
+  );
+  
+  // Generate random directors
+  const directorCount = randomInt(1, 2);
+  const directors = Array.from({ length: directorCount }, () => 
+    `${randomFrom(firstNames)} ${randomFrom(lastNames)}`
+  );
+  
+  // Generate random genres
+  const genreCount = randomInt(1, 3);
+  const movieGenres = Array.from(new Set(
+    Array.from({ length: genreCount }, () => randomFrom(genres))
+  ));
+  
+  const movie = {
+    _id: {
+      id: `random-${crypto.randomBytes(12).toString('hex')}`,
+      title: title,
+      year: year,
+      type: 'movie'
+    },
+    plot: `${title} is a ${movieGenres[0].toLowerCase()} film about ${randomFrom(['love', 'adventure', 'discovery', 'redemption', 'survival', 'mystery', 'friendship'])}.`,
+    genres: movieGenres,
+    runtime: runtime,
+    cast: cast,
+    fullplot: `${title} follows the story of ${cast[0]} in a ${randomFrom(['thrilling', 'heartwarming', 'suspenseful', 'dramatic', 'action-packed'])} journey. ${randomFrom(['Along the way', 'Throughout the film', 'As the story unfolds'])}, they ${randomFrom(['discover', 'uncover', 'reveal', 'face', 'encounter'])} ${randomFrom(['secrets', 'challenges', 'truths', 'obstacles', 'mysteries'])}.`,
+    countries: [randomFrom(countries)],
+    released: `${year}-${String(randomInt(1, 12)).padStart(2, '0')}-${String(randomInt(1, 28)).padStart(2, '0')}T00:00:00.000Z`,
+    directors: directors,
+    rated: randomFrom(ratings),
+    awards: {
+      wins: randomInt(0, 5),
+      nominations: randomInt(0, 10),
+      text: `${randomInt(0, 5)} wins & ${randomInt(0, 10)} nominations.`
+    },
+    imdb: {
+      rating: randomFloat(1.0, 10.0),
+      votes: randomInt(100, 1000000),
+      id: randomInt(1, 9999999)
+    },
+    tomatoes: Math.random() > 0.3 ? {
+      viewer: {
+        rating: randomFloat(1.0, 5.0),
+        numReviews: randomInt(10, 100000),
+        meter: randomInt(10, 100)
+      }
+    } : undefined
+  };
+  
+  return movie;
+}
+
+async function generateMovies(ditto: Ditto, count: number): Promise<void> {
+  console.log(`\n${applyColor('Generating random movies...', 'blue')}`);
+  console.log(`Count: ${count}`);
+  console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
+  
+  const startTime = Date.now();
+  const batchSize = 100;
+  let generated = 0;
+  let failed = 0;
+  
+  try {
+    for (let i = 0; i < count; i += batchSize) {
+      const currentBatch = Math.min(batchSize, count - i);
+      const movies = [];
+      
+      for (let j = 0; j < currentBatch; j++) {
+        movies.push(generateRandomMovie(i + j));
+      }
+      
+      // Insert batch
+      for (const movie of movies) {
+        try {
+          await ditto.store.execute(
+            'INSERT INTO movies DOCUMENTS (:doc)',
+            { doc: movie }
+          );
+          generated++;
+        } catch (error) {
+          failed++;
+          console.error(`Failed to insert movie: ${error}`);
+        }
+      }
+      
+      // Progress update
+      const progress = Math.round((generated / count) * 100);
+      process.stdout.write(`\rProgress: ${progress}% (${generated}/${count} movies)`);
+    }
+    
+    const elapsed = Date.now() - startTime;
+    const rate = generated / (elapsed / 1000);
+    
+    console.log(`\n\n${applyColor('Generation Complete!', 'green')}`);
+    console.log(`${applyColor('─'.repeat(50), 'blue')}`);
+    console.log(`Generated: ${applyColor(generated.toString(), 'green')} movies`);
+    if (failed > 0) {
+      console.log(`Failed: ${applyColor(failed.toString(), 'red')} movies`);
+    }
+    console.log(`Time: ${applyColor((elapsed / 1000).toFixed(2) + 's', 'yellow_highlight')}`);
+    console.log(`Rate: ${applyColor(rate.toFixed(0) + ' movies/sec', 'green')}`);
+    
+    // Show new total count
+    const countResult = await ditto.store.execute('SELECT COUNT(*) FROM movies');
+    if (countResult.items.length > 0) {
+      const totalCount = Object.values(countResult.items[0].value as any)[0] as number;
+      console.log(`\nTotal movies in collection: ${applyColor(totalCount.toString(), 'blue')}`);
+    }
+    
+  } catch (error) {
+    console.error(`\n\n${applyColor('Generation failed:', 'red')} ${error}`);
+  }
+}
+
 async function main() {
   await init();
 
@@ -1056,6 +1192,7 @@ async function main() {
       console.log('  .benchmark_show - Show saved baseline comparison table');
       console.log('  .system  - Show system information (document counts, indexes)');
       console.log('  .export <query> - Export query results to exports/export_<timestamp>.ndjson');
+      console.log('  .generate_movies <count> - Generate and insert random movies into the collection');
       console.log('  .log_dump - Export current log buffer to logs/manual-logs_<timestamp>.ndjson');
       console.log('  .log_debug - Show log buffer debug information');
       console.log('  .exit    - Exit the DQL terminal');
@@ -2047,6 +2184,42 @@ async function main() {
           } else {
             console.log(`  ${applyColor('No logs in buffer', 'yellow_highlight')}`);
           }
+        }
+        else if (input.toLowerCase().startsWith('.generate_movies ')) {
+          const args = input.split(' ');
+          const countStr = args[1];
+          
+          if (!countStr) {
+            console.log('Usage: .generate_movies <count>');
+            console.log('Example: .generate_movies 1000');
+            rl.prompt();
+            return;
+          }
+          
+          const count = parseInt(countStr);
+          if (isNaN(count) || count <= 0) {
+            console.log(`${applyColor('Invalid count:', 'red')} ${countStr}`);
+            console.log('Count must be a positive number');
+            rl.prompt();
+            return;
+          }
+          
+          if (count > 100000) {
+            console.log(`${applyColor('Warning:', 'yellow_highlight')} Generating ${count} movies may take a while and use significant resources.`);
+            const answer = await new Promise<string>((resolve) => {
+              rl.question('Continue? (y/N): ', (answer) => {
+                resolve(answer.toLowerCase().trim());
+              });
+            });
+            
+            if (answer !== 'y' && answer !== 'yes') {
+              console.log('Cancelled.');
+              rl.prompt();
+              return;
+            }
+          }
+          
+          await generateMovies(ditto, count);
         }
         else if (input.startsWith('.')) {
           console.log(`${applyColor('Invalid command:', 'red')} ${input}`);
