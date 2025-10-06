@@ -567,7 +567,13 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
       const totalCount = Object.values(countResult.items[0].value as any)[0] as number;
       console.log(`\nTotal movies in collection: ${applyColor(totalCount.toString(), 'blue')}`);
     }
-    
+
+    console.log(`\n${applyColor('Note:', 'yellow_highlight')} Generated documents have _id.id starting with 'random-'`);
+    console.log(`To query all randomly generated movies:`);
+    console.log(`  ${applyColor("SELECT * FROM movies WHERE starts_with(_id.id, 'random')", 'blue')}`);
+    console.log(`To delete all randomly generated movies:`);
+    console.log(`  ${applyColor("EVICT FROM movies WHERE starts_with(_id.id, 'random')", 'blue')}`);
+
   } catch (error) {
     console.error(`\n\n${applyColor('Generation failed:', 'red')} ${error}`);
   }
