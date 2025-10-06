@@ -6,15 +6,24 @@ A comprehensive command-line interface for running DQL queries against a Ditto d
 
 > To reset the database stop the application and delete the `./ditto` directory from the root.
 
-## Getting Started
+## Installation
 
-1. Install dependencies:
+### Global Installation (Recommended)
 ```bash
-npm install
+npm install -g ditto-dql-terminal
+ditto-dql-terminal
 ```
 
-2. Start the terminal:
+### Using npx (No Installation)
 ```bash
+npx ditto-dql-terminal
+```
+
+### From Source
+```bash
+git clone https://github.com/skylerjokiel/ditto-dql-terminal.git
+cd ditto-dql-terminal
+npm install
 npm run dev
 ```
 
@@ -38,6 +47,8 @@ The terminal will automatically import the movie dataset on first run. If a `ben
 - `.benchmark_show` - Display saved baseline comparison table
 - `.system` - Display comprehensive system information including Ditto version, hardware details, and database statistics
 - `.export <query>` - Export query results to `exports/export_<timestamp>.ndjson` file
+- `.log_dump` - Export current log buffer to `logs/manual-logs_<timestamp>.ndjson` file
+- `.log_debug` - Show log buffer debug information (buffer size, latest logs)
 - `.exit` - Exit the terminal
 
 ### Example DQL Queries
@@ -392,6 +403,14 @@ Stop and restart the app then run it with `.run my_scenario`
 - Timestamped filenames prevent overwrites
 - Organized in `exports/` directory (git-ignored)
 - Perfect for data analysis, backup, or sharing
+
+### Auto-Logging & Diagnostics
+- Automatic circular buffer logging captures last 100 Ditto log entries
+- Auto-export logs on warnings/errors to `logs/error-logs_<timestamp>.ndjson`
+- Manual log export with `.log_dump` command for troubleshooting
+- Debug information with `.log_debug` to check buffer status
+- Logs include timestamps, levels (ERROR, WARN, INFO, DEBUG, VERBOSE), and full messages
+- Perfect for debugging performance issues and Ditto SDK behavior
 
 ### Version Compatibility & Auto-Setup
 - Automatic version detection and feature compatibility checks

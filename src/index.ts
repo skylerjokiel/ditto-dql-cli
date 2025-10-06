@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { init, Ditto, Logger as DittoLogger, LogLevel, CustomLogCallback } from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
@@ -537,11 +538,8 @@ async function main() {
   }
 
   const ditto = new Ditto({
-    type: 'onlinePlayground',
-    appID: '28144349-0a59-4136-9490-705a4c14e75a',
-    token: '88779f89-4bd4-4b5c-ad19-1aa0a70c4a4b',
-    customAuthURL: "https://i83inp.cloud.dittolive.app",
-    enableDittoCloudSync: false,
+    type: 'offlinePlayground',
+    appID: 'ditto-dql-terminal'
   });
 
   await ditto.disableSyncWithV3();
@@ -557,10 +555,11 @@ async function main() {
     console.warn("DQL_STRICT_MODE = true because running version is <4.11.0");
   }
 
-  // Restrict `movies` collection to be local only (4.10.0+)
+  // Restrict collection to be local only (4.10.0+)
   if (isVersionAtLeast(dittoVersion, 4, 10, 0)) {
     const syncScopes = {
-      movies: "LocalPeerOnly"
+      movies: "LocalPeerOnly",
+      benchmark_baselines: "LocalPeerOnly"
     };
     await ditto.store.execute(
       "ALTER SYSTEM SET USER_COLLECTION_SYNC_SCOPES = :syncScopes",
@@ -1047,6 +1046,7 @@ async function main() {
   });
 
   console.log('Ditto DQL Terminal');
+  console.log(`Ditto SDK Version: ${applyColor(dittoVersion, 'green')}`);
 
   rl.prompt();
 
