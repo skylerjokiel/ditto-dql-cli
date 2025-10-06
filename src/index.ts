@@ -1877,7 +1877,7 @@ async function main() {
             
             // Color based on performance impact (matching table format)
             let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
-            if (displayValue < 10) {
+            if (baseline < 10) {
               // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
                 color = 'blue';
@@ -1903,14 +1903,14 @@ async function main() {
             
             // Format the difference display
             let formattedOutput: string;
-            if (displayValue < 10) {
+            if (baseline < 10) {
               // For fast queries, show absolute difference
               const sign = absoluteDiff >= 0 ? '+' : '';
-              formattedOutput = `${displayValue.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
+              formattedOutput = `${baseline.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
             } else {
               // For slow queries, show percentage
               const sign = percentDiff >= 0 ? '+' : '';
-              formattedOutput = `${displayValue.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
+              formattedOutput = `${baseline.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
             }
             
             return applyColor(formattedOutput.padStart(15), color);
@@ -2041,6 +2041,10 @@ async function main() {
           } else {
             console.log(`  ${applyColor('No logs in buffer', 'yellow_highlight')}`);
           }
+        }
+        else if (input.startsWith('.')) {
+          console.log(`${applyColor('Invalid command:', 'red')} ${input}`);
+          console.log(`Type ${applyColor('.help', 'blue')} to see available commands.`);
         }
         else {
           await executeDql(input, undefined, undefined, undefined, true, rl);
