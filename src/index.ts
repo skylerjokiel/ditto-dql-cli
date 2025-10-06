@@ -1443,16 +1443,16 @@ async function main() {
             return value.toFixed(1).padStart(15);
           };
           
-          const formatDiffCell = (current: number | undefined, baseline: number | undefined) => {
-            if (current === undefined || baseline === undefined) return '       -       ';
-            if (current === -1 || baseline === -1) return '      N/A      ';
+          const formatDiffCell = (displayValue: number | undefined, comparisonValue: number | undefined) => {
+            if (displayValue === undefined || comparisonValue === undefined) return '       -       ';
+            if (displayValue === -1 || comparisonValue === -1) return '      N/A      ';
             
-            const percentDiff = ((current - baseline) / baseline) * 100;
-            const absoluteDiff = current - baseline;
+            const percentDiff = ((comparisonValue - displayValue) / displayValue) * 100;
+            const absoluteDiff = comparisonValue - displayValue;
             
             // Color based on performance impact
             let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
-            if (baseline < 10) {
+            if (displayValue < 10) {
               // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
                 color = 'blue';
@@ -1477,18 +1477,18 @@ async function main() {
             }
             
             // Format the difference display
-            let displayValue: string;
-            if (baseline < 10) {
+            let formattedOutput: string;
+            if (displayValue < 10) {
               // For fast queries, show absolute difference
               const sign = absoluteDiff >= 0 ? '+' : '';
-              displayValue = `${current.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
+              formattedOutput = `${displayValue.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
             } else {
               // For slow queries, show percentage
               const sign = percentDiff >= 0 ? '+' : '';
-              displayValue = `${current.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
+              formattedOutput = `${displayValue.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
             }
             
-            return applyColor(displayValue.padStart(15), color);
+            return applyColor(formattedOutput.padStart(15), color);
           };
           
           let regressions = 0;
@@ -1516,8 +1516,8 @@ async function main() {
                 // Current version baseline - just show the value without comparison
                 row.push(formatCell(value));
               } else {
-                // Other versions - show with comparison
-                row.push(formatDiffCell(currentValue, value));
+                // Other versions - show that version's value with comparison to current
+                row.push(formatDiffCell(value, currentValue));
                 
                 // Count regressions/improvements (skip unsupported features)
                 if (currentValue !== undefined && currentValue !== -1 && 
@@ -1877,7 +1877,7 @@ async function main() {
             
             // Color based on performance impact (matching table format)
             let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
-            if (baseline < 10) {
+            if (displayValue < 10) {
               // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
                 color = 'blue';
@@ -1902,18 +1902,18 @@ async function main() {
             }
             
             // Format the difference display
-            let displayValue: string;
-            if (baseline < 10) {
+            let formattedOutput: string;
+            if (displayValue < 10) {
               // For fast queries, show absolute difference
               const sign = absoluteDiff >= 0 ? '+' : '';
-              displayValue = `${baseline.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
+              formattedOutput = `${displayValue.toFixed(1)} (${sign}${absoluteDiff.toFixed(1)})`;
             } else {
               // For slow queries, show percentage
               const sign = percentDiff >= 0 ? '+' : '';
-              displayValue = `${baseline.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
+              formattedOutput = `${displayValue.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
             }
             
-            return applyColor(displayValue.padStart(15), color);
+            return applyColor(formattedOutput.padStart(15), color);
           };
           
           // Sort benchmarks by name for consistent ordering
