@@ -1163,9 +1163,38 @@ async function main() {
     prompt: 'DQL> '
   });
 
-  console.log('Ditto DQL Terminal');
-  console.log(`Ditto SDK Version: ${applyColor(dittoVersion, 'green')}`);
-  console.log(`\nType ${applyColor('.help', 'blue')} for available commands`);
+  // Get document counts for collections
+  const moviesResult = await ditto.store.execute('SELECT * FROM movies');
+  const baselinesResult = await ditto.store.execute('SELECT * FROM benchmark_baselines');
+  const moviesTotal = moviesResult.items.length;
+  const baselinesTotal = baselinesResult.items.length;
+
+  // Print welcome box
+  const boxWidth = 120;
+  const topBorder = '╭' + '─'.repeat(boxWidth - 2) + '╮';
+  const bottomBorder = '╰' + '─'.repeat(boxWidth - 2) + '╯';
+
+  const centerText = (text: string) => {
+    // Strip ANSI color codes to get the actual visible length
+    const visibleLength = text.replace(/\x1b\[\d+m/g, '').length;
+    const padding = Math.floor((boxWidth - 4 - visibleLength) / 2);
+    const rightPadding = boxWidth - 4 - visibleLength - padding;
+    return '│ ' + ' '.repeat(padding) + text + ' '.repeat(rightPadding) + ' │';
+  };
+
+  console.log(applyColor(topBorder, 'blue'));
+  console.log(centerText(''));
+  console.log(centerText(applyColor('Ditto DQL CLI', 'blue')));
+  console.log(centerText(`v0.1.0 · Ditto SDK ${dittoVersion}`));
+  console.log(centerText(''));
+  console.log(centerText(applyColor(`Collections`, 'blue')));
+  console.log(centerText(`movies (${moviesTotal.toLocaleString()} docs)`));
+  console.log(centerText(`benchmark_baselines (${baselinesTotal} docs)`));
+  console.log(centerText(''));
+  console.log(centerText(`Type ${applyColor('.help', 'blue')} for available commands`));
+  console.log(centerText(''));
+  console.log(applyColor(bottomBorder, 'blue'));
+  console.log('');
 
   rl.prompt();
 
@@ -1179,32 +1208,26 @@ async function main() {
 
     if (input.toLowerCase() === '.help') {
       console.log('\nAvailable commands:');
-      console.log('  .help    - Show this help message');
-      console.log('  .list    - List all available scenarios');
-      console.log('  .run <name|index> - Run a scenario by name or index number');
-      console.log('  .all     - Run all scenarios in sequence');
-      console.log('  .bench <query> - Benchmark a query (20 runs)');
-      console.log('  .benchmarks - List all available benchmarks');
-      console.log('  .benchmark <name|index> [runs] - Run a specific benchmark (default: 5)');
-      console.log('  .benchmark_all [runs] - Run all benchmarks (default: 5)');
-      console.log('  .benchmark_baseline [runs] - Create baselines for all benchmarks (default: 50)');
-      console.log('  .benchmark_baseline <name> [runs] - Create baseline for specific benchmark');
-      console.log('  .benchmark_show - Show saved baseline comparison table');
-      console.log('  .system  - Show system information (document counts, indexes)');
-      console.log('  .export <query> - Export query results to exports/export_<timestamp>.ndjson');
-      console.log('  .generate_movies <count> - Generate and insert random movies into the collection');
-      console.log('  .log_dump - Export current log buffer to logs/manual-logs_<timestamp>.ndjson');
-      console.log('  .log_debug - Show log buffer debug information');
-      console.log('  .exit    - Exit the DQL terminal');
+      console.log(`  ${applyColor('.help', 'blue')}                              - Show this help message`);
+      console.log(`  ${applyColor('.list', 'blue')}                              - List all available scenarios`);
+      console.log(`  ${applyColor('.run <name|index>', 'blue')}                  - Run a scenario by name or index number`);
+      console.log(`  ${applyColor('.all', 'blue')}                               - Run all scenarios in sequence`);
+      console.log(`  ${applyColor('.bench <query>', 'blue')}                     - Benchmark a query (20 runs)`);
+      console.log(`  ${applyColor('.benchmarks', 'blue')}                        - List all available benchmarks`);
+      console.log(`  ${applyColor('.benchmark <name|index> [runs]', 'blue')}     - Run a specific benchmark (default: 5)`);
+      console.log(`  ${applyColor('.benchmark_all [runs]', 'blue')}              - Run all benchmarks (default: 5)`);
+      console.log(`  ${applyColor('.benchmark_baseline [runs]', 'blue')}         - Create baselines for all benchmarks (default: 50)`);
+      console.log(`  ${applyColor('.benchmark_baseline <name> [runs]', 'blue')}  - Create baseline for specific benchmark`);
+      console.log(`  ${applyColor('.benchmark_show', 'blue')}                    - Show saved baseline comparison table`);
+      console.log(`  ${applyColor('.system', 'blue')}                            - Show system information (document counts, indexes)`);
+      console.log(`  ${applyColor('.export <query>', 'blue')}                    - Export query results to exports/export_<timestamp>.ndjson`);
+      console.log(`  ${applyColor('.generate_movies <count>', 'blue')}           - Generate and insert random movies into the collection`);
+      console.log(`  ${applyColor('.log_dump', 'blue')}                          - Export current log buffer to logs/manual-logs_<timestamp>.ndjson`);
+      console.log(`  ${applyColor('.log_debug', 'blue')}                         - Show log buffer debug information`);
+      console.log(`  ${applyColor('.exit', 'blue')}                              - Exit the DQL terminal`);
       console.log('\nDQL queries:');
       console.log('  - Enter any valid DQL query to execute');
       console.log('  - Queries starting with EXPLAIN will show execution plan');
-      console.log('\nScenario validation:');
-      console.log('  - Scenarios can include expected result counts, index usage, and execution time');
-      console.log('  - expectedCount: validates the number of results returned');
-      console.log('  - expectedIndex: automatically runs EXPLAIN and validates index usage');
-      console.log('  - maxExecutionTime: validates query executes within time limit (ms)');
-      console.log('  - Use "full_scan" to expect a full table scan');
       console.log('\nBaseline overwrite options:');
       console.log('  y/yes  - Overwrite this baseline');
       console.log('  N/no   - Skip this baseline (default)');
