@@ -1,0 +1,171 @@
+{
+    "select_all": [
+        {
+            "query": "SELECT * from movies",
+            "expectedCount": 23539
+        }
+    ],
+    "count_all": [
+        {
+            "query": "SELECT count(*) from movies",
+            "expectedCount": 1,
+            "expectedIndex": "full_scan"
+        }
+    ],
+    "index_basic": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_rated on movies (rated)",
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'APPROVED'",
+            "expectedCount": 711,
+            "expectedIndex": "movies_rated",
+            "maxExecutionTime": 50
+        }
+    ],
+    "index_on_id_subfield": [
+        "DROP INDEX IF EXISTS movies_year on movies",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001'",
+            "expectedCount": 645,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_year on movies (_id.year)",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001'",
+            "expectedCount": 645,
+            "expectedIndex": "movies_year"
+        }
+    ],
+    "index_on_subfield": [
+        "DROP INDEX IF EXISTS award_wins on movies",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 1",
+            "expectedCount": 5280,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX award_wins on movies (awards.wins)",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 1",
+            "expectedCount": 5280,
+            "expectedIndex": "award_wins"
+        }
+    ],
+    "index_or_query_with_override": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_rated on movies (rated)",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "full_scan"
+        },
+        {
+            "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE awards.wins = 3 OR rated = 'APPROVED'",
+            "expectedCount": 2579,
+            "expectedIndex": "full_scan"
+        }
+    ],
+    "index_id_and_field_with_or_basic": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_rated on movies (rated)",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
+        {
+            "query": "SELECT * FROM movies USE DIRECTIVES '{\"#index\":null}' WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        }
+    ],
+    "index_complex_queries": [
+        "DROP INDEX IF EXISTS movies_rated on movies",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
+            "expectedCount": 0,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_rated on movies (rated)",
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' OR rated = 'APPROVED'",
+            "expectedCount": 1356,
+            "expectedIndex": "full_scan"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '2001' AND rated = 'APPROVED'",
+            "expectedCount": 0,
+            "expectedIndex": "movies_rated"
+        },
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 80 OR rated = 'APPROVED'",
+            "expectedCount": 21077,
+            "expectedIndex": "full_scan"
+        }
+    ],
+    "index_string_contains": [
+        "DROP INDEX IF EXISTS movies_plot_text on movies",
+        {
+            "query": "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_plot_text on movies (plot)",
+        {
+            "query": "SELECT plot FROM movies WHERE CONTAINS(plot, 'love') LIMIT 10",
+            "expectedIndex": "full_scan"
+        }
+    ],
+    "validation_test": [
+        {
+            "query": "SELECT * FROM movies WHERE rated = 'PG' LIMIT 5",
+            "expectedCount": 5
+        },
+        {
+            "query": "SELECT * FROM movies WHERE _id.year = '1999'",
+            "expectedCount": 542
+        },
+        {
+            "query": "SELECT * FROM movies WHERE runtime < 10",
+            "expectedCount": 151
+        },
+        "SELECT * FROM movies WHERE rated = 'G'",
+        {
+            "query": "SELECT * FROM movies WHERE awards.wins > 10",
+            "expectedCount": 2107
+        }
+    ],
+    "index_and_count_validation": [
+        "DROP INDEX IF EXISTS movies_runtime on movies",
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
+            "expectedCount": 100,
+            "expectedIndex": "full_scan"
+        },
+        "CREATE INDEX movies_runtime on movies (runtime)",
+        {
+            "query": "SELECT * FROM movies WHERE runtime > 150 LIMIT 100",
+            "expectedCount": 100,
+            "expectedIndex": "movies_runtime",
+            "maxExecutionTime": 50
+        }
+    ]
+}
