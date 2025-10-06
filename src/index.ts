@@ -6,8 +6,15 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 
-import scenarios from "../scenarios.json"
-import benchmarks from "../benchmarks.json"
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const scenarios = JSON.parse(readFileSync(join(__dirname, '..', 'scenarios.json'), 'utf-8'));
+const benchmarks = JSON.parse(readFileSync(join(__dirname, '..', 'benchmarks.json'), 'utf-8'));
 
 // Setup auto-logging with circular buffer
 DittoLogger.enabled = true;
