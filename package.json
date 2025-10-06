@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "dql": "./dist/cli.js"
+    "dql": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/skylerjokiel/dql-cli.git"
+    "url": "git+https://github.com/skylerjokiel/dql-cli.git"
   },
   "keywords": [
     "ditto",
