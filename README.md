@@ -11,12 +11,20 @@ A comprehensive command-line interface for running DQL queries against a Ditto d
 ### Global Installation (Recommended)
 ```bash
 npm install -g ditto-dql-terminal
-ditto-dql-terminal
+dql
 ```
 
 ### Using npx (No Installation)
 ```bash
 npx ditto-dql-terminal
+```
+
+### Running with Specific Ditto Version
+```bash
+dql                # Run with installed version
+dql 4.10.0         # Run with Ditto SDK 4.10.0
+dql 4.11.5         # Run with Ditto SDK 4.11.5
+dql --help         # Show usage information
 ```
 
 ### From Source
@@ -382,6 +390,12 @@ To add a new scenario, edit `scenarios.json` and add your queries with optional 
 Stop and restart the app then run it with `.run my_scenario`
 
 ## Key Features
+
+### Version Flexibility
+- Run with any Ditto SDK version using `dql <version>` command
+- Automatically downloads and installs the requested version
+- Perfect for testing queries across different Ditto versions
+- No need to manually manage multiple installations
 
 ### Comprehensive Benchmark Suite
 - 45+ benchmark scenarios covering various query patterns and optimizations

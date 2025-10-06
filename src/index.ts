@@ -13,8 +13,10 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const scenarios = JSON.parse(readFileSync(join(__dirname, '..', 'scenarios.json'), 'utf-8'));
-const benchmarks = JSON.parse(readFileSync(join(__dirname, '..', 'benchmarks.json'), 'utf-8'));
+// When running with specific version, files might be in original directory
+const baseDir = process.env.INIT_CWD || join(__dirname, '..');
+const scenarios = JSON.parse(readFileSync(join(baseDir, 'scenarios.json'), 'utf-8'));
+const benchmarks = JSON.parse(readFileSync(join(baseDir, 'benchmarks.json'), 'utf-8'));
 
 // Setup auto-logging with circular buffer
 DittoLogger.enabled = true;
@@ -315,7 +317,8 @@ async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<
 
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
-  const filePath = path.join(process.cwd(), docName);
+  const baseDir = process.env.INIT_CWD || process.cwd();
+  const filePath = path.join(baseDir, docName);
   
   if (!fs.existsSync(filePath)) {
     console.error(`Error: ${docName} not found.`);
@@ -383,7 +386,8 @@ async function importMovies(ditto: Ditto) {
 
 async function importBaselines(ditto: Ditto) {
   const docName = 'benchmark_baselines.ndjson';
-  const filePath = path.join(process.cwd(), docName);
+  const baseDir = process.env.INIT_CWD || process.cwd();
+  const filePath = path.join(baseDir, docName);
   
   if (!fs.existsSync(filePath)) {
     console.log(`${docName} not found, skipping baseline import.`);
