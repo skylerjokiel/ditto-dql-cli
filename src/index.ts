@@ -659,10 +659,12 @@ async function main() {
     return { result, countPassed, indexPassed, timePassed };
   }
 
+  // Set the directory path to the baseDir path so we don't create 'ditto' directories in the running dir when
+  // using the cli.  
   const ditto = new Ditto({
     type: 'offlinePlayground',
     appID: 'ditto-dql-terminal'
-  });
+  }, path.join(baseDir, 'ditto'));
 
   await ditto.disableSyncWithV3();
   ditto.updateTransportConfig((config) => {
