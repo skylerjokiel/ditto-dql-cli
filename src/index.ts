@@ -17,6 +17,7 @@ const __dirname = dirname(__filename);
 const baseDir = process.env.INIT_CWD || join(__dirname, '..');
 const scenarios = JSON.parse(readFileSync(join(baseDir, 'scenarios.json'), 'utf-8'));
 const benchmarks = JSON.parse(readFileSync(join(baseDir, 'benchmarks.json'), 'utf-8'));
+const packageJson = JSON.parse(readFileSync(join(baseDir, 'package.json'), 'utf-8'));
 
 // Setup auto-logging with circular buffer
 DittoLogger.enabled = true;
@@ -1190,12 +1191,15 @@ async function main() {
 
   console.log(applyColor(topBorder, 'blue'));
   console.log(centerText(''));
-  console.log(centerText(applyColor('Ditto DQL CLI', 'blue')));
-  console.log(centerText(`v0.1.3 · Ditto SDK ${dittoVersion}`));
+  console.log(centerText(applyColor('Ditto DQL Sandbox', 'blue')));
+  console.log(centerText(`v${packageJson.version} · Ditto SDK ${dittoVersion}`));
   console.log(centerText(''));
   console.log(centerText(applyColor(`Collections`, 'blue')));
   console.log(centerText(`movies (${moviesTotal.toLocaleString()} docs)`));
   console.log(centerText(`benchmark_baselines (${baselinesTotal} docs)`));
+  console.log(centerText(''));
+  console.log(centerText(applyColor('Working Directory', 'blue')));
+  console.log(centerText(`${baseDir}`));
   console.log(centerText(''));
   console.log(centerText(`Type ${applyColor('.help', 'blue')} for available commands`));
   console.log(centerText(''));
