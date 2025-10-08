@@ -611,7 +611,7 @@ async function main() {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
-    console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'orange')}`);
+    console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'blue')}`);
     console.log(`Result Count: ${result.items.length}`);
     
     let countPassed = true;
