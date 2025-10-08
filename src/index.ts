@@ -116,7 +116,7 @@ async function exportLogsOnError(): Promise<void> {
     const logData = logs.map(log => JSON.stringify(log)).join('\n');
     fs.writeFileSync(filepath, logData);
     
-    console.log(`\n${applyColor('📋 Logs exported:', 'yellow_highlight')} ${filename}`);
+    console.log(`\n${applyColor('📋 Logs exported:', 'orange')} ${filename}`);
     console.log(`   Location: ${filepath}`);
     console.log(`   Entries: ${logs.length}`);
   } catch (error) {
@@ -571,19 +571,19 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
     if (failed > 0) {
       console.log(`Failed: ${applyColor(failed.toString(), 'red')} movies`);
     }
-    console.log(`Time: ${applyColor((elapsed / 1000).toFixed(2) + 's', 'yellow_highlight')}`);
+    console.log(`Time: ${applyColor((elapsed / 1000).toFixed(2) + 's', 'green')}`);
     console.log(`Rate: ${applyColor(rate.toFixed(0) + ' movies/sec', 'green')}`);
 
     // Display insert operation statistics
     if (insertTimes.length > 0) {
-      console.log(`\n${applyColor('Insert Operation Statistics:', 'cyan')}`);
+      console.log(`\n${applyColor('Insert Operation Statistics:', 'blue')}`);
       console.log(`${applyColor('─'.repeat(50), 'blue')}`);
       console.log(`Min:    ${applyColor(min.toFixed(2) + 'ms', 'green')}`);
       console.log(`Max:    ${applyColor(max.toFixed(2) + 'ms', 'red')}`);
-      console.log(`Mean:   ${applyColor(mean.toFixed(2) + 'ms', 'yellow_highlight')}`);
-      console.log(`Median: ${applyColor(median.toFixed(2) + 'ms', 'yellow_highlight')}`);
-      console.log(`P95:    ${applyColor(p95.toFixed(2) + 'ms', 'yellow_highlight')}`);
-      console.log(`P99:    ${applyColor(p99.toFixed(2) + 'ms', 'yellow_highlight')}`);
+      console.log(`Mean:   ${mean.toFixed(2)}ms`);
+      console.log(`Median: ${median.toFixed(2)}ms`);
+      console.log(`P95:    ${p95.toFixed(2)}ms`);
+      console.log(`P99:    ${p99.toFixed(2)}ms`);
     }
 
     // Show new total count
@@ -593,7 +593,7 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
       console.log(`\nTotal movies in collection: ${applyColor(totalCount.toString(), 'blue')}`);
     }
 
-    console.log(`\n${applyColor('Note:', 'yellow_highlight')} Generated documents have _id.id starting with 'random-'`);
+    console.log(`\n${applyColor('Note:', 'orange')} Generated documents have _id.id starting with 'random-'`);
     console.log(`To query all randomly generated movies:`);
     console.log(`  ${applyColor("SELECT * FROM movies WHERE starts_with(_id.id, 'random')", 'blue')}`);
     console.log(`To delete all randomly generated movies:`);
@@ -611,7 +611,7 @@ async function main() {
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
-    console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'yellow_highlight')}`);
+    console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'orange')}`);
     console.log(`Result Count: ${result.items.length}`);
     
     let countPassed = true;
@@ -909,7 +909,7 @@ async function main() {
       }
       
       console.log(`\nDatabase Configuration:`);
-      console.log(`  DQL Strict Mode: ${applyColor(dqlStrictMode, dqlStrictMode === 'false' ? 'green' : 'yellow_highlight')}`);
+      console.log(`  DQL Strict Mode: ${applyColor(dqlStrictMode, dqlStrictMode === 'false' ? 'green' : 'orange')}`);
       console.log(`  Sync Enabled: ${applyColor('false', 'green')} (disabled for benchmarking)`);
       
       console.log(`\nDocument Statistics (sample of 100):`);
@@ -922,7 +922,7 @@ async function main() {
       
       console.log(`\nIndexes:`);
       if (!indexesResult || !indexesResult.items || indexesResult.items.length === 0) {
-        console.log(`  ${applyColor('None', 'yellow_highlight')}`);
+        console.log(`  ${applyColor('None', 'orange')}`);
       } else {
         // Count valid indexes
         let validIndexes = 0;
@@ -945,7 +945,7 @@ async function main() {
         
         console.log(validIndexes)
         if (validIndexes === 0) {
-          console.log(`  ${applyColor('None', 'yellow_highlight')}`);
+          console.log(`  ${applyColor('None', 'orange')}`);
         } else {
           console.log(`  Total: ${applyColor(validIndexes.toString(), 'green')}`);
           console.log(`  Details:`);
@@ -1020,7 +1020,7 @@ async function main() {
           console.log(`Progress: ${percent}% (${i + 1}/${count})`);
         }
       } catch (error) {
-        console.log(`\n${applyColor('Feature not supported:', 'yellow_highlight')} ${error instanceof Error ? error.message : String(error)}`);
+        console.log(`\n${applyColor('Feature not supported:', 'orange')} ${error instanceof Error ? error.message : String(error)}`);
         console.log('Skipping benchmark for this query');
         return {
           mean: -1, median: -1, min: -1, max: -1, stdDev: -1, p95: -1, p99: -1, resultCount: -1, times: []
@@ -1077,7 +1077,7 @@ async function main() {
           const sign = percentDiff >= 0 ? '+' : '';
           
           // Color based on performance impact (matching table format)
-          let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+          let color: TextColors;
           if (baseline < 10) {
             // For fast queries, use absolute difference
             if (Math.abs(absoluteDiff) < 1) {
@@ -1085,7 +1085,7 @@ async function main() {
             } else if (absoluteDiff < 0) {
               color = 'green';
             } else if (absoluteDiff < 2) {
-              color = 'yellow_highlight';
+              color = 'orange';
             } else {
               color = 'red';
             }
@@ -1096,7 +1096,7 @@ async function main() {
             } else if (percentDiff < 0) {
               color = 'green';
             } else if (percentDiff < 15) {
-              color = 'yellow_highlight';
+              color = 'orange';
             } else {
               color = 'red';
             }
@@ -1126,7 +1126,7 @@ async function main() {
           console.log(`  ${versionLabel}: ${baseline.metrics.mean.toFixed(1)}ms ${formatDiff(mean, baseline.metrics.mean)} (→ ${mean.toFixed(1)}ms)`);
         });
       } else {
-        console.log(`\n${applyColor('No baselines found for comparison', 'yellow_highlight')}`);
+        console.log(`\n${applyColor('No baselines found for comparison', 'orange')}`);
         console.log(`Create baselines with '.benchmark_baseline' first`);
       }
     }
@@ -1585,14 +1585,14 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'orange')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
               
             } catch (error: any) {
               console.log(`${applyColor('❌ Benchmark failed:', 'red')} ${error.message || error}`);
-              console.log(`${applyColor('Skipping benchmark:', 'yellow_highlight')} ${benchmarkName}`);
+              console.log(`${applyColor('Skipping benchmark:', 'orange')} ${benchmarkName}`);
               skippedBenchmarks++;
               
               // Still add to results but with error indicators
@@ -1612,7 +1612,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'orange')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1664,7 +1664,7 @@ async function main() {
             const absoluteDiff = comparisonValue - displayValue;
             
             // Color based on performance impact
-            let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+            let color: 'green' | 'orange' | 'red' | 'blue';
             if (displayValue < 10) {
               // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
@@ -1672,7 +1672,7 @@ async function main() {
               } else if (absoluteDiff < 0) {
                 color = 'green';
               } else if (absoluteDiff < 2) {
-                color = 'yellow_highlight';
+                color = 'orange';
               } else {
                 color = 'red';
               }
@@ -1683,7 +1683,7 @@ async function main() {
               } else if (percentDiff < 0) {
                 color = 'green';
               } else if (percentDiff < 15) {
-                color = 'yellow_highlight';
+                color = 'orange';
               } else {
                 color = 'red';
               }
@@ -1756,7 +1756,7 @@ async function main() {
           
           console.log(`\n${applyColor('Legend:', 'blue')}`);
           console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
-          console.log(`  ${applyColor('Yellow', 'yellow_highlight')} = Small regression (1-2ms or 5-15% slower)`);
+          console.log(`  ${applyColor('Orange', 'orange')} = Small regression (1-2ms or 5-15% slower)`);
           console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
           console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
           
@@ -1861,7 +1861,7 @@ async function main() {
               // Check if baseline already exists
               const existingBaseline = await getBaseline(ditto, hash, dittoVersion);
               if (existingBaseline) {
-                console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'yellow_highlight')}`);
+                console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'orange')}`);
                 console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
                 
                 let shouldOverwrite = false;
@@ -1944,7 +1944,7 @@ async function main() {
                 await saveBaseline(ditto, baseline);
                 console.log(`${applyColor('✓ Baseline saved', 'green')}`);
               } else {
-                console.log(`${applyColor('⚠️ Skipped baseline creation (feature not supported)', 'yellow_highlight')}`);
+                console.log(`${applyColor('⚠️ Skipped baseline creation (feature not supported)', 'orange')}`);
               }
               
               // Run post-queries if they exist
@@ -1955,14 +1955,14 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'orange')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
               
             } catch (error: any) {
               console.log(`${applyColor('❌ Baseline creation failed:', 'red')} ${error.message || error}`);
-              console.log(`${applyColor('Skipping baseline for:', 'yellow_highlight')} ${benchmarkName}`);
+              console.log(`${applyColor('Skipping baseline for:', 'orange')} ${benchmarkName}`);
               skippedBaselines++;
               
               // Try to run cleanup queries even if baseline creation failed
@@ -1973,7 +1973,7 @@ async function main() {
                     console.log(`  Cleanup: ${postQuery}`);
                     await ditto.store.execute(postQuery);
                   } catch (cleanupError) {
-                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'yellow_highlight')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
+                    console.log(`${applyColor('⚠️ Cleanup query failed:', 'orange')} ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`);
                   }
                 }
               }
@@ -1997,7 +1997,7 @@ async function main() {
           if (skippedBaselines === 0) {
             console.log(`\n${applyColor('✅ All baselines created successfully!', 'green')}`);
           } else if (successfulBaselines > 0) {
-            console.log(`\n${applyColor('⚠️ Baseline creation completed with some failures', 'yellow_highlight')}`);
+            console.log(`\n${applyColor('⚠️ Baseline creation completed with some failures', 'orange')}`);
           } else {
             console.log(`\n${applyColor('❌ No baselines were created due to errors', 'red')}`);
           }
@@ -2044,7 +2044,7 @@ async function main() {
           }
           
           if (baselinesByBenchmark.size === 0) {
-            console.log(`\n${applyColor('No baseline data found!', 'yellow_highlight')}`);
+            console.log(`\n${applyColor('No baseline data found!', 'orange')}`);
             console.log(`Run '.benchmark_baseline' to create baselines first.`);
             rl.prompt();
             return;
@@ -2089,7 +2089,7 @@ async function main() {
             const absoluteDiff = current - baseline;
             
             // Color based on performance impact (matching table format)
-            let color: 'green' | 'yellow_highlight' | 'red' | 'blue';
+            let color: 'green' | 'orange' | 'red' | 'blue';
             if (baseline < 10) {
               // For fast queries, use absolute difference
               if (Math.abs(absoluteDiff) < 1) {
@@ -2097,7 +2097,7 @@ async function main() {
               } else if (absoluteDiff < 0) {
                 color = 'green';
               } else if (absoluteDiff < 2) {
-                color = 'yellow_highlight';
+                color = 'orange';
               } else {
                 color = 'red';
               }
@@ -2108,7 +2108,7 @@ async function main() {
               } else if (percentDiff < 0) {
                 color = 'green';
               } else if (percentDiff < 15) {
-                color = 'yellow_highlight';
+                color = 'orange';
               } else {
                 color = 'red';
               }
@@ -2154,7 +2154,7 @@ async function main() {
           
           console.log(`\n${applyColor('Legend:', 'blue')}`);
           console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
-          console.log(`  ${applyColor('Yellow', 'yellow_highlight')} = Small regression (1-2ms or 5-15% slower)`);
+          console.log(`  ${applyColor('Orange', 'orange')} = Small regression (1-2ms or 5-15% slower)`);
           console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
           console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
           
@@ -2202,7 +2202,7 @@ async function main() {
             const result = await ditto.store.execute(query);
             
             if (result.items.length === 0) {
-              console.log(`${applyColor('No documents returned by query', 'yellow_highlight')}`);
+              console.log(`${applyColor('No documents returned by query', 'orange')}`);
               rl.prompt();
               return;
             }
@@ -2252,7 +2252,7 @@ async function main() {
             console.log(`  Latest log: ${logs[logs.length - 1].level} - ${logs[logs.length - 1].message.substring(0, 100)}`);
             console.log(`  Oldest log: ${logs[0].level} - ${logs[0].message.substring(0, 100)}`);
           } else {
-            console.log(`  ${applyColor('No logs in buffer', 'yellow_highlight')}`);
+            console.log(`  ${applyColor('No logs in buffer', 'orange')}`);
           }
         }
         else if (input.toLowerCase().startsWith('.generate_movies ')) {
@@ -2275,7 +2275,7 @@ async function main() {
           }
           
           if (count > 100000) {
-            console.log(`${applyColor('Warning:', 'yellow_highlight')} Generating ${count} movies may take a while and use significant resources.`);
+            console.log(`${applyColor('Warning:', 'orange')} Generating ${count} movies may take a while and use significant resources.`);
             const answer = await new Promise<string>((resolve) => {
               rl.question('Continue? (y/N): ', (answer) => {
                 resolve(answer.toLowerCase().trim());
@@ -2314,12 +2314,16 @@ async function main() {
 
 main();
 
-type TextColors = 'blue' | 'red' | 'green' | 'yellow_highlight'
+type TextColors = 'blue' | 'red' | 'green' /*| 'yellow_highlight'*/ | 'orange';
 const applyColor = (text:string, color:TextColors) => {
   switch(color){
     case 'blue': return `\x1b[34m${text}\x1b[0m`;
     case 'red': return `\x1b[31m${text}\x1b[0m`;
     case 'green': return `\x1b[32m${text}\x1b[0m`;
-    case 'yellow_highlight': return `\x1b[43m${text}\x1b[0m`
+   //case 'yellow_highlight': return `\x1b[43m${text}\x1b[0m`;
+    case 'orange': return `\x1b[38;5;202m${text}\x1b[0m`;
+
+    // Handler for generic cases where AI makes up a new color and we're not running through ts compiler 
+    return `\x1b[0m${text}\x1b[0m`
   }
 }
