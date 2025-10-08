@@ -514,35 +514,39 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
   console.log(`\n${applyColor('Generating random movies...', 'blue')}`);
   console.log(`Count: ${count}`);
   console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
-  
+
   const startTime = Date.now();
   const batchSize = 100;
   let generated = 0;
   let failed = 0;
-  
+  const insertTimes: number[] = [];
+
   try {
     for (let i = 0; i < count; i += batchSize) {
       const currentBatch = Math.min(batchSize, count - i);
       const movies = [];
-      
+
       for (let j = 0; j < currentBatch; j++) {
         movies.push(generateRandomMovie(i + j));
       }
-      
+
       // Insert batch
       for (const movie of movies) {
         try {
+          const insertStart = Date.now();
           await ditto.store.execute(
             'INSERT INTO movies DOCUMENTS (:doc)',
             { doc: movie }
           );
+          const insertElapsed = Date.now() - insertStart;
+          insertTimes.push(insertElapsed);
           generated++;
         } catch (error) {
           failed++;
           console.error(`Failed to insert movie: ${error}`);
         }
       }
-      
+
       // Progress update
       const progress = Math.round((generated / count) * 100);
       process.stdout.write(`\rProgress: ${progress}% (${generated}/${count} movies)`);
@@ -550,7 +554,17 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
     
     const elapsed = Date.now() - startTime;
     const rate = generated / (elapsed / 1000);
-    
+
+    // Calculate insert operation statistics
+    const sortedTimes = [...insertTimes].sort((a, b) => a - b);
+    const sum = insertTimes.reduce((acc, t) => acc + t, 0);
+    const mean = sum / insertTimes.length;
+    const min = sortedTimes[0];
+    const max = sortedTimes[sortedTimes.length - 1];
+    const median = sortedTimes[Math.floor(sortedTimes.length / 2)];
+    const p95 = sortedTimes[Math.floor(sortedTimes.length * 0.95)];
+    const p99 = sortedTimes[Math.floor(sortedTimes.length * 0.99)];
+
     console.log(`\n\n${applyColor('Generation Complete!', 'green')}`);
     console.log(`${applyColor('─'.repeat(50), 'blue')}`);
     console.log(`Generated: ${applyColor(generated.toString(), 'green')} movies`);
@@ -559,7 +573,19 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
     }
     console.log(`Time: ${applyColor((elapsed / 1000).toFixed(2) + 's', 'yellow_highlight')}`);
     console.log(`Rate: ${applyColor(rate.toFixed(0) + ' movies/sec', 'green')}`);
-    
+
+    // Display insert operation statistics
+    if (insertTimes.length > 0) {
+      console.log(`\n${applyColor('Insert Operation Statistics:', 'cyan')}`);
+      console.log(`${applyColor('─'.repeat(50), 'blue')}`);
+      console.log(`Min:    ${applyColor(min.toFixed(2) + 'ms', 'green')}`);
+      console.log(`Max:    ${applyColor(max.toFixed(2) + 'ms', 'red')}`);
+      console.log(`Mean:   ${applyColor(mean.toFixed(2) + 'ms', 'yellow_highlight')}`);
+      console.log(`Median: ${applyColor(median.toFixed(2) + 'ms', 'yellow_highlight')}`);
+      console.log(`P95:    ${applyColor(p95.toFixed(2) + 'ms', 'yellow_highlight')}`);
+      console.log(`P99:    ${applyColor(p99.toFixed(2) + 'ms', 'yellow_highlight')}`);
+    }
+
     // Show new total count
     const countResult = await ditto.store.execute('SELECT COUNT(*) FROM movies');
     if (countResult.items.length > 0) {
