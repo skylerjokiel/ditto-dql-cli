@@ -1754,11 +1754,8 @@ async function main() {
               if (version === dittoVersion) {
                 // Current version - just show the value
                 row.push(formatCell(value));
-              } else if (version.endsWith('-baseline')) {
-                // Current version baseline - just show the value without comparison
-                row.push(formatCell(value));
               } else {
-                // Other versions - show that version's value with comparison to current
+                // Other versions (including baselines) - show current value with comparison to baseline
                 row.push(formatDiffCell(value, currentValue));
 
                 // Count regressions/improvements (skip unsupported features)
