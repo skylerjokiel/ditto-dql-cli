@@ -1,5 +1,13 @@
 #!/usr/bin/env node
-import { init, Ditto, Logger as DittoLogger, LogLevel, CustomLogCallback } from '@dittolive/ditto';
+import {
+  init,
+  Ditto,
+  Logger as DittoLogger,
+  LogLevel,
+  CustomLogCallback,
+  DittoConfig,
+  DittoConfigConnect
+} from '@dittolive/ditto';
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,6 +17,7 @@ import * as crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { error } from 'console';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,7 +33,7 @@ DittoLogger.enabled = true;
 DittoLogger.minimumLogLevel = 'Info';
 const levelNames: Record<LogLevel, string> = {
   'Error': 'ERROR',
-  'Warning': 'WARN', 
+  'Warning': 'WARN',
   'Info': 'INFO',
   'Debug': 'DEBUG',
   'Verbose': 'VERBOSE'
@@ -38,10 +47,10 @@ const customLogger: CustomLogCallback = (logLevel: LogLevel, message: string) =>
     message,
     logLevel
   };
-  
+
   // Add to circular buffer
   logBuffer.add(logEntry);
-  
+
   // Export logs on warnings and errors
   if (logLevel === 'Error' || logLevel === 'Warning') {
     exportLogsOnError().catch(error => {
@@ -98,24 +107,24 @@ const logBuffer = new CircularBuffer<LogEntry>(100);
 async function exportLogsOnError(): Promise<void> {
   try {
     const logsDir = path.join(process.cwd(), 'logs');
-    
+
     // Create logs directory if it doesn't exist
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
-    
+
     const logs = logBuffer.getAll();
     if (logs.length === 0) {
       return;
     }
-    
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `error-logs-${timestamp}.ndjson`;
     const filepath = path.join(logsDir, filename);
-    
+
     const logData = logs.map(log => JSON.stringify(log)).join('\n');
     fs.writeFileSync(filepath, logData);
-    
+
     console.log(`\n${applyColor('📋 Logs exported:', 'orange')} ${filename}`);
     console.log(`   Location: ${filepath}`);
     console.log(`   Entries: ${logs.length}`);
@@ -127,20 +136,20 @@ async function exportLogsOnError(): Promise<void> {
 async function manualLogDump(): Promise<void> {
   try {
     const logsDir = path.join(process.cwd(), 'logs');
-    
+
     // Create logs directory if it doesn't exist
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
-    
+
     const logs = logBuffer.getAll();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `manual-logs-${timestamp}.ndjson`;
     const filepath = path.join(logsDir, filename);
-    
+
     const logData = logs.length > 0 ? logs.map(log => JSON.stringify(log)).join('\n') : '';
     fs.writeFileSync(filepath, logData);
-    
+
     console.log(`\n${applyColor('📋 Log buffer dumped:', 'green')} ${filename}`);
     console.log(`   Location: ${filepath}`);
     console.log(`   Entries: ${logs.length}`);
@@ -210,7 +219,7 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
   }
   return {
     major: parseInt(match[1]),
-    minor: parseInt(match[2]), 
+    minor: parseInt(match[2]),
     patch: parseInt(match[3]),
     raw: version
   };
@@ -219,13 +228,13 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
 function compareVersions(a: string, b: string): number {
   const vA = parseVersion(a);
   const vB = parseVersion(b);
-  
+
   // If either version couldn't be parsed (non-standard semver), sort alphabetically
-  if ((vA.major === 0 && vA.minor === 0 && vA.patch === 0) || 
-      (vB.major === 0 && vB.minor === 0 && vB.patch === 0)) {
+  if ((vA.major === 0 && vA.minor === 0 && vA.patch === 0) ||
+    (vB.major === 0 && vB.minor === 0 && vB.patch === 0)) {
     return b.localeCompare(a); // Reverse alphabetical for consistency with version sorting
   }
-  
+
   if (vA.major !== vB.major) return vB.major - vA.major;
   if (vA.minor !== vB.minor) return vB.minor - vA.minor;
   return vB.patch - vA.patch;
@@ -246,7 +255,7 @@ async function getBaseline(ditto: Ditto, hash: string, dittoVersion: string): Pr
       "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash AND _id.ditto_version = :version",
       { hash, version: dittoVersion }
     );
-    
+
     if (result.items.length > 0) {
       return result.items[0].value as BenchmarkBaseline;
     }
@@ -262,11 +271,11 @@ async function getComparisonBaselines(ditto: Ditto, hash: string, currentVersion
       "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash",
       { hash }
     );
-    
+
     if (result.items.length === 0) return [];
-    
+
     const allBaselines = result.items.map(item => item.value as BenchmarkBaseline);
-    
+
     // Return ALL baselines except current version, sorted alphabetically
     return allBaselines
       .filter(baseline => baseline._id.ditto_version !== currentVersion)
@@ -290,27 +299,27 @@ async function saveBaseline(ditto: Ditto, baseline: BenchmarkBaseline): Promise<
 async function importMovies(ditto: Ditto) {
   const docName = 'movies.ndjson';
   const filePath = path.join(baseDir, docName);
-  
+
   if (!fs.existsSync(filePath)) {
     console.error(`Error: ${docName} not found.`);
     return;
   }
 
   console.log('Starting movie import...');
-  
-  try {   
+
+  try {
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const lines = fileContent.trim().split('\n');
-    
+
     let successCount = 0;
     let errorCount = 0;
-    
+
     // Process in batches
     const batchSize = 100;
     for (let i = 0; i < lines.length; i += batchSize) {
       const batch = lines.slice(i, i + batchSize);
       const documents = [];
-      
+
       for (const line of batch) {
         try {
           const doc = JSON.parse(line);
@@ -320,7 +329,7 @@ async function importMovies(ditto: Ditto) {
           console.error(`Failed to parse line: ${e}`);
         }
       }
-      
+
       if (documents.length > 0) {
         try {
           // Insert batch
@@ -328,10 +337,10 @@ async function importMovies(ditto: Ditto) {
             await ditto.store.execute(
               `INSERT INTO movies DOCUMENTS (:doc)
               ON ID CONFLICT DO UPDATE`
-            , { doc });
+              , { doc });
             successCount++;
           }
-          
+
           if (successCount % 1000 === 0) {
             console.log(`Imported ${successCount} movies...`);
           }
@@ -341,15 +350,15 @@ async function importMovies(ditto: Ditto) {
         }
       }
     }
-    
+
     console.log(`\nImport complete!`);
     console.log(`Successfully imported: ${successCount} movies`);
     console.log(`Errors: ${errorCount}`);
-    
+
     // Show count
     const countResult = await ditto.store.execute(`SELECT COUNT(*) FROM movies`);
     console.log(`Total movies in collection: ${(countResult.items[0] as any).count}`);
-    
+
   } catch (error) {
     console.error('Import failed:', error);
   }
@@ -358,21 +367,21 @@ async function importMovies(ditto: Ditto) {
 async function importBaselines(ditto: Ditto) {
   const docName = 'benchmark_baselines.ndjson';
   const filePath = path.join(baseDir, docName);
-  
+
   if (!fs.existsSync(filePath)) {
     console.log(`${docName} not found, skipping baseline import.`);
     return;
   }
 
   console.log('Starting benchmark baseline import...');
-  
-  try {   
+
+  try {
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const lines = fileContent.trim().split('\n');
-    
+
     let successCount = 0;
     let errorCount = 0;
-    
+
     for (const line of lines) {
       try {
         const baseline = JSON.parse(line);
@@ -381,7 +390,7 @@ async function importBaselines(ditto: Ditto) {
           { baseline }
         );
         successCount++;
-        
+
         if (successCount % 50 === 0) {
           console.log(`Imported ${successCount} baselines...`);
         }
@@ -390,11 +399,11 @@ async function importBaselines(ditto: Ditto) {
         console.error(`Failed to import baseline: ${e}`);
       }
     }
-    
+
     console.log(`\nBaseline import complete!`);
     console.log(`Successfully imported: ${successCount} baselines`);
     console.log(`Errors: ${errorCount}`);
-    
+
     // Show count
     try {
       const countResult = await ditto.store.execute("SELECT COUNT(*) FROM COLLECTION benchmark_baselines (metrics MAP)");
@@ -402,7 +411,7 @@ async function importBaselines(ditto: Ditto) {
     } catch (error) {
       // Collection might not exist yet, that's ok
     }
-    
+
   } catch (error) {
     console.error('Baseline import failed:', error);
   }
@@ -412,24 +421,24 @@ function extractIndexInfo(explainResult: any): string | null {
   try {
     const plan = explainResult?.plan;
     if (!plan) return null;
-    
+
     // Check for full scan
-    if (plan['#operator'] === 'scan' || 
-        (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'scan'))) {
+    if (plan['#operator'] === 'scan' ||
+      (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'scan'))) {
       // Look for full_scan in descriptor
       const scanOp = plan['#operator'] === 'scan' ? plan : plan.children.find((child: any) => child['#operator'] === 'scan');
       if (scanOp?.descriptor?.path?._id === 'query_details' && scanOp?.descriptor?.path?.full_scan !== undefined) {
         return 'full_scan';
       }
     }
-    
+
     // Check for index scan
-    if (plan['#operator'] === 'index_scan' || 
-        (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'index_scan'))) {
+    if (plan['#operator'] === 'index_scan' ||
+      (plan['#operator'] === 'sequence' && plan.children?.some((child: any) => child['#operator'] === 'index_scan'))) {
       const indexOp = plan['#operator'] === 'index_scan' ? plan : plan.children.find((child: any) => child['#operator'] === 'index_scan');
       return indexOp?.desc?.index || null;
     }
-    
+
     return null;
   } catch {
     return null;
@@ -444,34 +453,34 @@ function generateRandomMovie(index: number): any {
   const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
   const countries = ['USA', 'UK', 'Canada', 'France', 'Germany', 'Italy', 'Spain', 'Japan', 'Australia', 'Mexico'];
   const ratings = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'UNRATED', 'APPROVED', 'NOT RATED'];
-  
+
   const randomFrom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
   const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const randomFloat = (min: number, max: number, decimals: number = 1) => 
+  const randomFloat = (min: number, max: number, decimals: number = 1) =>
     parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
-  
+
   const year = randomInt(1920, 2024).toString();
   const title = `${randomFrom(adjectives)} ${randomFrom(nouns)}`;
   const runtime = randomInt(60, 180);
-  
+
   // Generate random cast
   const castSize = randomInt(2, 5);
-  const cast = Array.from({ length: castSize }, () => 
+  const cast = Array.from({ length: castSize }, () =>
     `${randomFrom(firstNames)} ${randomFrom(lastNames)}`
   );
-  
+
   // Generate random directors
   const directorCount = randomInt(1, 2);
-  const directors = Array.from({ length: directorCount }, () => 
+  const directors = Array.from({ length: directorCount }, () =>
     `${randomFrom(firstNames)} ${randomFrom(lastNames)}`
   );
-  
+
   // Generate random genres
   const genreCount = randomInt(1, 3);
   const movieGenres = Array.from(new Set(
     Array.from({ length: genreCount }, () => randomFrom(genres))
   ));
-  
+
   const movie = {
     _id: {
       id: `random-${crypto.randomBytes(12).toString('hex')}`,
@@ -506,7 +515,7 @@ function generateRandomMovie(index: number): any {
       }
     } : undefined
   };
-  
+
   return movie;
 }
 
@@ -551,7 +560,7 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
       const progress = Math.round((generated / count) * 100);
       process.stdout.write(`\rProgress: ${progress}% (${generated}/${count} movies)`);
     }
-    
+
     const elapsed = Date.now() - startTime;
     const rate = generated / (elapsed / 1000);
 
@@ -607,17 +616,18 @@ async function generateMovies(ditto: Ditto, count: number): Promise<void> {
 async function main() {
   await init();
 
-  const executeDql = async (query:string, expectedCount?: number, expectedIndex?: string | 'full_scan', maxExecutionTime?: number, interactive: boolean = false, rl?: readline.Interface) => {
+  const executeDql = async (query: string, expectedCount?: number, expectedIndex?: string | 'full_scan', maxExecutionTime?: number, interactive: boolean = false, rl?: readline.Interface) => {
+    if (!ditto) throw error;
     const start = Date.now();
     const result = await ditto.store.execute(query);
     const elapsed = Date.now() - start;
     console.log(`execute-time: ${applyColor(elapsed.toString() + 'ms', 'blue')}`);
     console.log(`Result Count: ${result.items.length}`);
-    
+
     let countPassed = true;
     let indexPassed = true;
     let timePassed = true;
-    
+
     // Validate expected count if provided
     if (expectedCount !== undefined) {
       if (result.items.length === expectedCount) {
@@ -627,7 +637,7 @@ async function main() {
         countPassed = false;
       }
     }
-    
+
     // Validate execution time if provided
     if (maxExecutionTime !== undefined) {
       if (elapsed <= maxExecutionTime) {
@@ -637,16 +647,16 @@ async function main() {
         timePassed = false;
       }
     }
-    
+
     // If expectedIndex is provided and this isn't already an EXPLAIN query, run EXPLAIN version
     const qLower = query.toLowerCase();
     if (expectedIndex !== undefined && !qLower.startsWith('explain') && !qLower.startsWith('profile')) {
       const explainQuery = `EXPLAIN ${query}`;
       const explainResult = await ditto.store.execute(explainQuery);
-      
+
       if (explainResult.items.length > 0 && explainResult.items[0].value) {
         const indexUsed = extractIndexInfo(explainResult.items[0].value);
-        
+
         if (indexUsed === expectedIndex) {
           console.log(`Index Validation: ${applyColor('✓ PASSED', 'green')} - Using ${expectedIndex === 'full_scan' ? 'full scan' : `index '${expectedIndex}'`}`);
         } else {
@@ -659,13 +669,13 @@ async function main() {
         }
       }
     }
-    
+
     // Handle regular EXPLAIN or PROFILE queries
     if (qLower.startsWith('explain') || qLower.startsWith('profile')) {
       console.log();
       console.log(JSON.stringify(result.items[0].value, null, 2));
     }
-    
+
     // Interactive prompt for raw DQL commands
     if (interactive && result.items.length > 0 && !qLower.startsWith('explain') && !qLower.startsWith('profile') && rl) {
       const answer = await new Promise<string>((resolve) => {
@@ -673,7 +683,7 @@ async function main() {
           resolve(answer.toLowerCase().trim());
         });
       });
-      
+
       if (answer === 'y' || answer === 'yes') {
         console.log('\nResults:');
         result.items.forEach((item, index) => {
@@ -681,25 +691,44 @@ async function main() {
         });
       }
     }
-    
+
     console.log();
     return { result, countPassed, indexPassed, timePassed };
   }
 
-  // Set the directory path to the baseDir path so we don't create 'ditto' directories in the running dir when
-  // using the cli.  
-  const ditto = new Ditto({
-    type: 'offlinePlayground',
-    appID: 'ditto-dql-terminal'
-  }, path.join(baseDir, 'ditto'));
+  let ditto: Ditto | undefined;
+  const dittoVersion = await getDittoVersion();
 
-  await ditto.disableSyncWithV3();
+  // Ditto 5.0 changes initialization
+  if (isVersionAtLeast(dittoVersion, 5, 0, 0)) {
+    const config: DittoConfig = new DittoConfig(
+      'ditto-dql-terminal',
+      {
+        mode: 'smallPeersOnly'
+      },
+      path.join(baseDir, 'ditto')
+    );
+    ditto = await Ditto.open(config);
+  } else {
+    // Set the directory path to the baseDir path so we don't create 'ditto' directories in the running dir when
+    // using the cli.
+    // @ts-ignore - Need this to support multiple versions
+    ditto = new Ditto({
+      type: 'offlinePlayground',
+      appID: 'ditto-dql-terminal'
+    }, path.join(baseDir, 'ditto'));
+
+    // @ts-ignore - Need this to support multiple versions
+    await ditto.disableSyncWithV3();
+  }
+
+  if (!ditto) throw error;
+
   ditto.updateTransportConfig((config) => {
     config.connect.websocketURLs.push('wss://i83inp.cloud.dittolive.app');
   });
 
   // Uses the new DQL Document Schema mode where type definitions are not required (4.11.0+)
-  const dittoVersion = await getDittoVersion();
   if (isVersionAtLeast(dittoVersion, 4, 11, 0)) {
     await ditto.store.execute("ALTER SYSTEM SET DQL_STRICT_MODE = false");
   } else {
@@ -743,7 +772,7 @@ async function main() {
     try {
       console.log(`\n${applyColor('System Information', 'blue')}`);
       console.log(`${applyColor('═'.repeat(50), 'blue')}`);
-      
+
       // Get Ditto version
       let dittoVersion = 'Unknown';
       try {
@@ -755,48 +784,48 @@ async function main() {
       } catch (error) {
         console.error('Could not read Ditto version:', error);
       }
-      
+
       console.log(`\nDitto SDK Version: ${applyColor(dittoVersion, 'green')}`);
-      
+
       // Get system information
       const platform = os.platform();
       const arch = os.arch();
       const release = os.release();
       const hostname = os.hostname();
       const uptime = Math.floor(os.uptime() / 60); // Convert to minutes
-      
+
       // Memory information
       const totalMemory = Math.round(os.totalmem() / (1024 * 1024 * 1024)); // GB
       const freeMemory = Math.round(os.freemem() / (1024 * 1024 * 1024)); // GB
       const usedMemory = totalMemory - freeMemory;
       const memoryUsage = Math.round((usedMemory / totalMemory) * 100);
-      
+
       // CPU information
       const cpus = os.cpus();
       const cpuModel = cpus[0]?.model || 'Unknown';
       const cpuCores = cpus.length;
-      
+
       // Load averages (Unix-like systems)
       const loadAvg = os.loadavg();
-      
+
       console.log(`\nSystem Information:`);
       console.log(`  Platform: ${applyColor(`${platform} ${arch}`, 'green')}`);
       console.log(`  OS Release: ${applyColor(release, 'green')}`);
       console.log(`  Hostname: ${applyColor(hostname, 'green')}`);
       console.log(`  Uptime: ${applyColor(`${uptime} minutes`, 'green')}`);
-      
+
       console.log(`\nCPU Information:`);
       console.log(`  Model: ${applyColor(cpuModel, 'green')}`);
       console.log(`  Cores: ${applyColor(cpuCores.toString(), 'green')}`);
       if (platform !== 'win32') {
         console.log(`  Load Average: ${applyColor(`${loadAvg[0].toFixed(2)}, ${loadAvg[1].toFixed(2)}, ${loadAvg[2].toFixed(2)}`, 'green')}`);
       }
-      
+
       console.log(`\nMemory Information:`);
       console.log(`  Total: ${applyColor(`${totalMemory} GB`, 'green')}`);
       console.log(`  Used: ${applyColor(`${usedMemory} GB`, usedMemory / totalMemory > 0.8 ? 'red' : 'green')} (${memoryUsage}%)`);
       console.log(`  Free: ${applyColor(`${freeMemory} GB`, 'green')}`);
-      
+
       // Node.js Process Information
       const processMemory = process.memoryUsage();
       const heapUsed = Math.round(processMemory.heapUsed / (1024 * 1024)); // MB
@@ -804,20 +833,20 @@ async function main() {
       const external = Math.round(processMemory.external / (1024 * 1024)); // MB
       const nodeVersion = process.version;
       const processUptime = Math.floor(process.uptime() / 60); // Minutes
-      
+
       console.log(`\nNode.js Information:`);
       console.log(`  Version: ${applyColor(nodeVersion, 'green')}`);
       console.log(`  Process Uptime: ${applyColor(`${processUptime} minutes`, 'green')}`);
       console.log(`  Heap Used: ${applyColor(`${heapUsed} MB`, heapUsed > heapTotal * 0.8 ? 'red' : 'green')} / ${heapTotal} MB`);
       console.log(`  External Memory: ${applyColor(`${external} MB`, 'green')}`);
-      
+
       // Storage Information
       let diskInfo = '';
       let dittoDirSize = '';
       try {
         const stats = fs.statSync('./');
         const dittoPath = path.join(process.cwd(), 'ditto');
-        
+
         // Get available disk space (approximate via fs.statSync)
         if (fs.existsSync(dittoPath)) {
           const getDirSize = (dirPath: string): number => {
@@ -834,7 +863,7 @@ async function main() {
             }
             return totalSize;
           };
-          
+
           const size = getDirSize(dittoPath);
           const sizeMB = Math.round(size / (1024 * 1024));
           dittoDirSize = `${sizeMB} MB`;
@@ -844,19 +873,19 @@ async function main() {
       } catch (error) {
         dittoDirSize = 'Unable to calculate';
       }
-      
+
       console.log(`\nStorage Information:`);
       console.log(`  Working Directory: ${applyColor(process.cwd(), 'green')}`);
-      console.log(`  Ditto Directory: ${applyColor(ditto.persistenceDirectory, 'green')}`);
+      console.log(`  Ditto Directory: ${applyColor(ditto.absolutePersistenceDirectory, 'green')}`);
       console.log(`  Ditto Database Size: ${applyColor(dittoDirSize, 'green')}`);
-      
+
       // Database Statistics Section
       console.log(`\n${applyColor('Database Statistics', 'blue')}`);
       console.log(`${applyColor('─'.repeat(30), 'blue')}`);
-      
+
       // Get document count
       const countResult = await ditto.store.execute("SELECT COUNT(*) FROM movies");
-      
+
       let documentCount = 0;
       if (countResult.items.length > 0) {
         const item = countResult.items[0];
@@ -867,14 +896,14 @@ async function main() {
           documentCount = Object.values(value)[0] as number;
         }
       }
-      
+
       console.log(`\nDocument Counts:`);
       if (documentCount !== undefined) {
         console.log(`  movies: ${applyColor(documentCount.toString(), 'green')}`);
       } else {
         console.log(`  movies: ${applyColor('Unable to get count', 'red')}`);
       }
-      
+
       // Get DQL configuration
       let dqlStrictMode = 'Unknown';
       try {
@@ -885,7 +914,7 @@ async function main() {
       } catch (error) {
         dqlStrictMode = 'Unable to fetch';
       }
-      
+
       // Get document size statistics
       let avgDocSize = 'Unknown';
       let minDocSize = 'Unknown';
@@ -898,7 +927,7 @@ async function main() {
             const jsonStr = JSON.stringify(item.value);
             return jsonStr.length;
           });
-          
+
           const totalSize = sizes.reduce((sum, size) => sum + size, 0);
           avgDocSize = `${Math.round(totalSize / sizes.length)} bytes`;
           minDocSize = `${Math.min(...sizes)} bytes`;
@@ -907,19 +936,19 @@ async function main() {
       } catch (error) {
         avgDocSize = 'Unable to calculate';
       }
-      
+
       console.log(`\nDatabase Configuration:`);
       console.log(`  DQL Strict Mode: ${applyColor(dqlStrictMode, dqlStrictMode === 'false' ? 'green' : 'orange')}`);
       console.log(`  Sync Enabled: ${applyColor('false', 'green')} (disabled for benchmarking)`);
-      
+
       console.log(`\nDocument Statistics (sample of 100):`);
       console.log(`  Average Size: ${applyColor(avgDocSize, 'green')}`);
       console.log(`  Min Size: ${applyColor(minDocSize, 'green')}`);
       console.log(`  Max Size: ${applyColor(maxDocSize, 'green')}`)
-      
+
       // Get current indexes
       const indexesResult = await ditto.store.execute("SELECT * FROM system:indexes");
-      
+
       console.log(`\nIndexes:`);
       if (!indexesResult || !indexesResult.items || indexesResult.items.length === 0) {
         console.log(`  ${applyColor('None', 'orange')}`);
@@ -927,7 +956,7 @@ async function main() {
         // Count valid indexes
         let validIndexes = 0;
         const indexDetails: string[] = [];
-        
+
         for (const indexItem of indexesResult.items) {
           const indexData = indexItem.value;
           if (indexData && indexData._id && indexData.collection && indexData.fields) {
@@ -935,14 +964,14 @@ async function main() {
             const indexId = indexData._id; // Format: "collection.index_name"
             const collection = indexData.collection;
             const fields = indexData.fields;
-            
+
             // Extract index name from the ID
             const indexName = indexId.substring(collection.length + 1);
-            
+
             indexDetails.push(`    • ${applyColor(indexName, 'green')} on ${applyColor(collection, 'blue')} (${fields.join(', ')})`);
           }
         }
-        
+
         console.log(validIndexes)
         if (validIndexes === 0) {
           console.log(`  ${applyColor('None', 'orange')}`);
@@ -963,23 +992,23 @@ async function main() {
     try {
       // Get all existing indexes
       const indexesResult = await ditto.store.execute("SELECT * FROM system:indexes");
-      
+
       if (indexesResult.items.length === 0) {
         console.log(`${applyColor('No indexes to clean up', 'blue')}`);
         return;
       }
-      
+
       console.log(`${applyColor(`Cleaning up ${indexesResult.items.length} indexes...`, 'blue')}`);
-      
+
       // Drop each index
       for (const indexItem of indexesResult.items) {
         const indexData = indexItem.value;
         const indexId = indexData._id; // Format: "collection.index_name"
         const collection = indexData.collection;
-        
+
         // Extract index name from the ID (remove collection prefix)
         const indexName = indexId.substring(collection.length + 1);
-        
+
         try {
           await ditto.store.execute(`DROP INDEX IF EXISTS ${indexName} ON ${collection}`);
           console.log(`  Dropped index: ${indexName} on ${collection}`);
@@ -987,7 +1016,7 @@ async function main() {
           console.log(`  Failed to drop index ${indexName} on ${collection}: ${error}`);
         }
       }
-      
+
       console.log(`${applyColor('Index cleanup complete', 'green')}`);
     } catch (error) {
       console.log(`${applyColor('Index cleanup failed:', 'red')} ${error}`);
@@ -999,12 +1028,12 @@ async function main() {
     console.log(`Query: ${applyColor(query, 'green')}`);
     console.log(`Runs: ${count}`);
     console.log(`${applyColor('─'.repeat(50), 'blue')}`);
-    
+
     const times: number[] = [];
     let resultCount = 0;
-    
+
     console.log('Running benchmark...');
-    
+
     for (let i = 0; i < count; i++) {
       const start = Date.now();
       try {
@@ -1012,7 +1041,7 @@ async function main() {
         const elapsed = Date.now() - start;
         times.push(elapsed);
         if (i === 0) resultCount = result.items.length; // Store result count from first run
-        
+
         // Show progress every 20% or every 10 runs for small counts
         const progressInterval = Math.max(1, Math.floor(count / 5));
         if ((i + 1) % progressInterval === 0 || i === count - 1) {
@@ -1027,23 +1056,23 @@ async function main() {
         };
       }
     }
-    
+
     // Calculate statistics
     times.sort((a, b) => a - b);
     const sum = times.reduce((a, b) => a + b, 0);
     const mean = sum / times.length;
-    const median = times.length % 2 === 0 
+    const median = times.length % 2 === 0
       ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2
       : times[Math.floor(times.length / 2)];
     const min = times[0];
     const max = times[times.length - 1];
     const p95 = times[Math.floor(times.length * 0.95)];
     const p99 = times[Math.floor(times.length * 0.99)];
-    
+
     // Calculate standard deviation
     const variance = times.reduce((acc, time) => acc + Math.pow(time - mean, 2), 0) / times.length;
     const stdDev = Math.sqrt(variance);
-    
+
     console.log(`\n${applyColor('Benchmark Results', 'blue')}`);
     console.log(`${applyColor('═'.repeat(50), 'blue')}`);
     console.log(`Result Count: ${resultCount}`);
@@ -1059,23 +1088,23 @@ async function main() {
     console.log(`\nThroughput:`);
     console.log(`  Queries/sec: ${(1000 / mean).toFixed(2)}`);
     console.log(`  Total time:  ${(sum / 1000).toFixed(2)}s`);
-    
+
     // Compare with baselines if requested (only if query is supported)
     if (compareBaseline && mean !== -1) {
       const hash = generateBenchmarkHash(preQueries, query);
       const dittoVersion = await getDittoVersion();
       const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
       const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
-      
+
       if (comparisonBaselines.length > 0 || currentBaseline) {
         console.log(`\n${applyColor(`Baseline Comparisons (current: v${dittoVersion})`, 'blue')}`);
         console.log(`${applyColor('─'.repeat(50), 'blue')}`);
-        
+
         const formatDiff = (current: number, baseline: number) => {
           const percentDiff = ((current - baseline) / baseline) * 100;
           const absoluteDiff = current - baseline;
           const sign = percentDiff >= 0 ? '+' : '';
-          
+
           // Color based on performance impact (matching table format)
           let color: TextColors;
           if (baseline < 10) {
@@ -1101,24 +1130,24 @@ async function main() {
               color = 'red';
             }
           }
-          
+
           return applyColor(`${sign}${percentDiff.toFixed(1)}%`, color);
         };
-        
+
         // Collect all baselines for display
         const allBaselines: BenchmarkBaseline[] = [];
         if (currentBaseline) {
           allBaselines.push(currentBaseline);
         }
         allBaselines.push(...comparisonBaselines);
-        
+
         // Sort by version (current first, then by version number descending)
         allBaselines.sort((a, b) => {
           if (a._id.ditto_version === dittoVersion) return -1;
           if (b._id.ditto_version === dittoVersion) return 1;
           return compareVersions(a._id.ditto_version, b._id.ditto_version);
         });
-        
+
         // Show all version comparisons
         allBaselines.forEach((baseline) => {
           const isCurrent = baseline._id.ditto_version === dittoVersion;
@@ -1130,9 +1159,9 @@ async function main() {
         console.log(`Create baselines with '.benchmark_baseline' first`);
       }
     }
-    
+
     console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
-    
+
     return {
       mean, median, min, max, stdDev, p95, p99, resultCount, times
     };
@@ -1142,14 +1171,14 @@ async function main() {
     console.log(`\nRunning scenario: ${scenarioName}`);
     let passedTests = 0;
     let totalTests = 0;
-    
+
     for (let index = 0; index < scenario.length; index++) {
       const item = scenario[index];
       let query: string;
       let expectedCount: number | undefined;
       let expectedIndex: string | 'full_scan' | undefined;
       let maxExecutionTime: number | undefined;
-      
+
       if (typeof item === 'string') {
         query = item;
       } else {
@@ -1159,21 +1188,21 @@ async function main() {
         maxExecutionTime = item.maxExecutionTime;
         if (expectedCount !== undefined || expectedIndex !== undefined || maxExecutionTime !== undefined) totalTests++;
       }
-      
+
       console.log(applyColor(`Executing: ${index + 1}/${scenario.length}`, 'blue'));
       console.log(`Query: ${applyColor(query, 'green')}`);
-      
+
       const { countPassed, indexPassed, timePassed } = await executeDql(query, expectedCount, expectedIndex, maxExecutionTime);
-      
+
       // Check if tests passed
       const hasTest = expectedCount !== undefined || expectedIndex !== undefined || maxExecutionTime !== undefined;
       const allPassed = countPassed && indexPassed && timePassed;
-      
+
       if (hasTest && allPassed) {
         passedTests++;
       }
     }
-    
+
     if (totalTests > 0) {
       console.log(`\nScenario Summary: ${passedTests}/${totalTests} tests passed`);
       if (passedTests === totalTests) {
@@ -1182,11 +1211,11 @@ async function main() {
         console.log(applyColor(`${totalTests - passedTests} tests failed ✗`, 'red'));
       }
     }
-    
+
     // Clean up indexes after scenario completes
     console.log(`\n${applyColor('─'.repeat(50), 'blue')}`);
     await cleanupIndexes();
-    
+
     return { passedTests, totalTests };
   };
 
@@ -1306,10 +1335,10 @@ async function main() {
             rl.prompt();
             return;
           }
-          
+
           const scenarioKeys = Object.keys(scenarios);
           let scenarioName: string;
-          
+
           // Check if arg is a number (index)
           const index = parseInt(arg);
           if (!isNaN(index) && index > 0 && index <= scenarioKeys.length) {
@@ -1317,15 +1346,15 @@ async function main() {
           } else {
             scenarioName = arg;
           }
-          
+
           const scenario = scenarios[scenarioName as keyof typeof scenarios];
-          
+
           if (!scenario) {
             console.log(`Scenario '${arg}' not found. Use .list to see available scenarios.`);
             rl.prompt();
             return;
           }
-          
+
           await runScenario(scenarioName, scenario as ScenarioQuery[]);
         }
         else if (input.toLowerCase() === '.all') {
@@ -1333,21 +1362,21 @@ async function main() {
           let totalPassed = 0;
           let totalTestCount = 0;
           const scenarioResults: { name: string; passed: number; total: number; status: 'pass' | 'fail' | 'no-tests' }[] = [];
-          
+
           console.log(`\n${applyColor('Running all scenarios...', 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
-          
+
           // Clean up any existing indexes before starting
           console.log(`${applyColor('Pre-run cleanup:', 'blue')}`);
           await cleanupIndexes();
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
-          
+
           for (const scenarioName of scenarioKeys) {
             const scenario = scenarios[scenarioName as keyof typeof scenarios];
             const { passedTests, totalTests } = await runScenario(scenarioName, scenario as ScenarioQuery[]);
             totalPassed += passedTests;
             totalTestCount += totalTests;
-            
+
             let status: 'pass' | 'fail' | 'no-tests';
             if (totalTests === 0) {
               status = 'no-tests';
@@ -1356,20 +1385,20 @@ async function main() {
             } else {
               status = 'fail';
             }
-            
+
             scenarioResults.push({ name: scenarioName, passed: passedTests, total: totalTests, status });
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
-          
+
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
           console.log(applyColor('SUMMARY', 'blue'));
           console.log(`${applyColor('═'.repeat(50), 'blue')}\n`);
-          
+
           // Scenario summary
           const passedScenarios = scenarioResults.filter(r => r.status === 'pass').length;
           const failedScenarios = scenarioResults.filter(r => r.status === 'fail').length;
           const noTestScenarios = scenarioResults.filter(r => r.status === 'no-tests').length;
-          
+
           console.log('Scenario Results:');
           for (const result of scenarioResults) {
             const statusIcon = result.status === 'pass' ? '✓' : result.status === 'fail' ? '✗' : '-';
@@ -1377,7 +1406,7 @@ async function main() {
             const testInfo = result.total > 0 ? ` (${result.passed}/${result.total} tests)` : ' (no validation tests)';
             console.log(`  ${applyColor(statusIcon, statusColor)} ${result.name}${testInfo}`);
           }
-          
+
           // Scenario-level summary
           console.log(`\n${applyColor('─'.repeat(50), 'blue')}`);
           console.log(`Scenario Summary: ${passedScenarios} passed, ${failedScenarios} failed, ${noTestScenarios} no tests`);
@@ -1385,7 +1414,7 @@ async function main() {
             const scenarioFailRate = Math.round((failedScenarios / (passedScenarios + failedScenarios)) * 100);
             console.log(`Scenario Fail Rate: ${scenarioFailRate}%`);
           }
-          
+
           // Test-level summary
           if (totalTestCount > 0) {
             console.log(`\nTest Summary: ${totalPassed}/${totalTestCount} tests passed`);
@@ -1414,22 +1443,22 @@ async function main() {
           const args = input.split(' ');
           const arg = args[1];
           const runCount = args[2] ? parseInt(args[2]) : 5;
-          
+
           if (!arg) {
             console.log('Please provide a benchmark name or index number');
             rl.prompt();
             return;
           }
-          
+
           if (isNaN(runCount) || runCount < 1) {
             console.log('Run count must be a positive number');
             rl.prompt();
             return;
           }
-          
+
           const benchmarkKeys = Object.keys(benchmarks);
           let benchmarkName: string;
-          
+
           // Check if arg is a number (index)
           const index = parseInt(arg);
           if (!isNaN(index) && index > 0 && index <= benchmarkKeys.length) {
@@ -1437,17 +1466,17 @@ async function main() {
           } else {
             benchmarkName = arg;
           }
-          
+
           const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
-          
+
           if (!benchmark) {
             console.log(`Benchmark '${arg}' not found. Use .benchmarks to see available benchmarks.`);
             rl.prompt();
             return;
           }
-          
+
           console.log(`\nRunning benchmark: ${benchmarkName}`);
-          
+
           // Run pre-queries if they exist
           if (benchmark.preQueries && benchmark.preQueries.length > 0) {
             console.log(`${applyColor('Running setup queries...', 'blue')}`);
@@ -1456,10 +1485,10 @@ async function main() {
               await ditto.store.execute(preQuery);
             }
           }
-          
+
           console.log(`Query: ${benchmark.query}`);
           await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
-          
+
           // Run post-queries if they exist
           if (benchmark.postQueries && benchmark.postQueries.length > 0) {
             console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
@@ -1472,13 +1501,13 @@ async function main() {
         else if (input.toLowerCase().startsWith('.benchmark_all')) {
           const args = input.split(' ');
           const runCount = args[1] ? parseInt(args[1]) : 5;
-          
+
           if (isNaN(runCount) || runCount < 1) {
             console.log('Run count must be a positive number');
             rl.prompt();
             return;
           }
-          
+
           const benchmarkKeys = Object.keys(benchmarks);
           const benchmarkResults: Array<{
             name: string;
@@ -1487,25 +1516,25 @@ async function main() {
             percentChange?: number;
             hasBaseline: boolean;
           }> = [];
-          
+
           // Collect all baseline data by benchmark and version
           const baselinesByBenchmark = new Map<string, Map<string, number>>();
           const allVersions = new Set<string>();
           const dittoVersion = await getDittoVersion();
           allVersions.add(dittoVersion);
-          
+
           console.log(`\n${applyColor('Running all benchmarks...', 'blue')}`);
           console.log(`${applyColor(`Runs per benchmark: ${runCount}`, 'blue')}`);
           console.log(`${applyColor('━'.repeat(50), 'blue')}\n`);
-          
+
           let skippedBenchmarks = 0;
           let benchmarkIndex = 0;
-          
+
           for (const benchmarkName of benchmarkKeys) {
             benchmarkIndex++;
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             console.log(`${applyColor(`Running benchmark (${benchmarkIndex}/${benchmarkKeys.length}): ${benchmarkName}`, 'blue')}`);
-            
+
             try {
               // Run pre-queries if they exist
               if (benchmark.preQueries && benchmark.preQueries.length > 0) {
@@ -1515,47 +1544,47 @@ async function main() {
                   await ditto.store.execute(preQuery);
                 }
               }
-              
+
               console.log(`Query: ${benchmark.query}`);
               const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || []);
-            
+
               // Only collect baseline data if query is supported
               if (results.mean !== -1) {
                 // Collect results for summary
                 const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
                 const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
                 const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
-                
+
                 // Store current run results
                 if (!baselinesByBenchmark.has(benchmarkName)) {
                   baselinesByBenchmark.set(benchmarkName, new Map());
                 }
                 const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
                 benchmarkData.set(dittoVersion, results.mean);
-                
+
                 // Store all historical baselines for this benchmark
                 comparisonBaselines.forEach(baseline => {
                   allVersions.add(baseline._id.ditto_version);
                   benchmarkData.set(baseline._id.ditto_version, baseline.metrics.mean);
                 });
-                
+
                 // Also include current version baseline if it exists (different from current run)
                 if (currentBaseline && currentBaseline.metrics.mean !== results.mean) {
                   benchmarkData.set(`${dittoVersion}-baseline`, currentBaseline.metrics.mean);
                   allVersions.add(`${dittoVersion}-baseline`);
                 }
               }
-              
+
               // For backward compatibility with existing summary logic
               let baselineMean: number | undefined;
               let percentChange: number | undefined;
               let hasBaseline = false;
-              
+
               if (results.mean !== -1) {
                 const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
                 const comparisonBaselines = await getComparisonBaselines(ditto, hash, dittoVersion);
                 const currentBaseline = await getBaseline(ditto, hash, dittoVersion);
-                
+
                 if (comparisonBaselines.length > 0) {
                   // Use the most recent comparison baseline
                   baselineMean = comparisonBaselines[0].metrics.mean;
@@ -1568,7 +1597,7 @@ async function main() {
                   hasBaseline = true;
                 }
               }
-              
+
               benchmarkResults.push({
                 name: benchmarkName,
                 mean: results.mean,
@@ -1576,7 +1605,7 @@ async function main() {
                 percentChange,
                 hasBaseline
               });
-              
+
               // Run post-queries if they exist
               if (benchmark.postQueries && benchmark.postQueries.length > 0) {
                 console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
@@ -1589,12 +1618,12 @@ async function main() {
                   }
                 }
               }
-              
+
             } catch (error: any) {
               console.log(`${applyColor('❌ Benchmark failed:', 'red')} ${error.message || error}`);
               console.log(`${applyColor('Skipping benchmark:', 'orange')} ${benchmarkName}`);
               skippedBenchmarks++;
-              
+
               // Still add to results but with error indicators
               benchmarkResults.push({
                 name: benchmarkName,
@@ -1603,7 +1632,7 @@ async function main() {
                 percentChange: undefined,
                 hasBaseline: false
               });
-              
+
               // Try to run cleanup queries even if main benchmark failed
               if (benchmark.postQueries && benchmark.postQueries.length > 0) {
                 console.log(`${applyColor('Attempting cleanup after failure...', 'blue')}`);
@@ -1617,25 +1646,25 @@ async function main() {
                 }
               }
             }
-            
+
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
-          
+
           // Generate comprehensive summary
           console.log(`${applyColor('═'.repeat(80), 'blue')}`);
           console.log(`${applyColor('BENCHMARK SUMMARY', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
-          
+
           // Sort versions (current first, then by semver descending) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
             return compareVersions(a, b);
           });
-          
+
           // Show all versions (no limit)
           const displayVersions = sortedVersions;
-          
+
           // Generate table header
           console.log('Benchmark Name                 ' + displayVersions.map(v => {
             if (v === dittoVersion) {
@@ -1648,21 +1677,21 @@ async function main() {
             }
           }).join(' '));
           console.log('─'.repeat(30) + ' ' + displayVersions.map(() => '─'.repeat(15)).join(' '));
-          
+
           // Helper functions for table formatting
           const formatCell = (value: number | undefined) => {
             if (value === undefined) return '       -       ';
             if (value === -1) return '      N/A      ';
             return value.toFixed(1).padStart(15);
           };
-          
+
           const formatDiffCell = (displayValue: number | undefined, comparisonValue: number | undefined) => {
             if (displayValue === undefined || comparisonValue === undefined) return '       -       ';
             if (displayValue === -1 || comparisonValue === -1) return '      N/A      ';
-            
+
             const percentDiff = ((comparisonValue - displayValue) / displayValue) * 100;
             const absoluteDiff = comparisonValue - displayValue;
-            
+
             // Color based on performance impact
             let color: 'green' | 'orange' | 'red' | 'blue';
             if (displayValue < 10) {
@@ -1688,7 +1717,7 @@ async function main() {
                 color = 'red';
               }
             }
-            
+
             // Format the difference display
             let formattedOutput: string;
             if (displayValue < 10) {
@@ -1700,28 +1729,28 @@ async function main() {
               const sign = percentDiff >= 0 ? '+' : '';
               formattedOutput = `${displayValue.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
             }
-            
+
             return applyColor(formattedOutput.padStart(15), color);
           };
-          
+
           let regressions = 0;
           let improvements = 0;
           let noChange = 0;
           let noBaseline = 0;
-          
+
           // Sort benchmarks by name for consistent ordering
           const sortedBenchmarks = Array.from(baselinesByBenchmark.entries()).sort(([a], [b]) => a.localeCompare(b));
-          
+
           // Generate table rows
           for (const [benchmarkName, versionData] of sortedBenchmarks) {
             const row = [benchmarkName.padEnd(30)];
             const currentValue = versionData.get(dittoVersion);
             let hasAnyBaseline = false;
-            
+
             for (let i = 0; i < displayVersions.length; i++) {
               const version = displayVersions[i];
               const value = versionData.get(version);
-              
+
               if (version === dittoVersion) {
                 // Current version - just show the value
                 row.push(formatCell(value));
@@ -1731,15 +1760,15 @@ async function main() {
               } else {
                 // Other versions - show that version's value with comparison to current
                 row.push(formatDiffCell(value, currentValue));
-                
+
                 // Count regressions/improvements (skip unsupported features)
-                if (currentValue !== undefined && currentValue !== -1 && 
-                    value !== undefined && value !== -1) {
+                if (currentValue !== undefined && currentValue !== -1 &&
+                  value !== undefined && value !== -1) {
                   hasAnyBaseline = true;
                   const percentDiff = ((currentValue - value) / value) * 100;
                   const absoluteDiff = currentValue - value;
                   const isSignificant = value < 10 ? Math.abs(absoluteDiff) >= 1 : Math.abs(percentDiff) >= 5;
-                  
+
                   if (isSignificant) {
                     if (percentDiff > 0) regressions++;
                     else improvements++;
@@ -1749,36 +1778,36 @@ async function main() {
                 }
               }
             }
-            
+
             if (!hasAnyBaseline) noBaseline++;
             console.log(row.join(' '));
           }
-          
+
           console.log(`\n${applyColor('Legend:', 'blue')}`);
           console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
           console.log(`  ${applyColor('Orange', 'orange')} = Small regression (1-2ms or 5-15% slower)`);
           console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
           console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
-          
+
           const totalComparisons = regressions + improvements + noChange;
           const totalBenchmarks = benchmarkKeys.length;
           const successfulBenchmarks = totalBenchmarks - skippedBenchmarks;
-          
+
           console.log(`\n${applyColor('Benchmark Execution Summary:', 'blue')}`);
           console.log(`  Total Benchmarks: ${totalBenchmarks}`);
           console.log(`  ${applyColor('Successful:', 'green')} ${successfulBenchmarks}`);
           if (skippedBenchmarks > 0) {
             console.log(`  ${applyColor('Skipped (errors):', 'red')} ${skippedBenchmarks}`);
           }
-          
+
           if (totalComparisons > 0) {
             console.log(`\n${applyColor('Performance Comparison Summary:', 'blue')}`);
             console.log(`  Total Comparisons: ${totalComparisons}`);
-            console.log(`  ${applyColor('Improvements:', 'green')} ${improvements} (${(improvements/totalComparisons*100).toFixed(0)}%)`);
-            console.log(`  ${applyColor('Regressions:', 'red')} ${regressions} (${(regressions/totalComparisons*100).toFixed(0)}%)`);
-            console.log(`  ${applyColor('No change:', 'blue')} ${noChange} (${(noChange/totalComparisons*100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('Improvements:', 'green')} ${improvements} (${(improvements / totalComparisons * 100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('Regressions:', 'red')} ${regressions} (${(regressions / totalComparisons * 100).toFixed(0)}%)`);
+            console.log(`  ${applyColor('No change:', 'blue')} ${noChange} (${(noChange / totalComparisons * 100).toFixed(0)}%)`);
             console.log(`  ${applyColor('No baseline:', 'blue')} ${noBaseline}`);
-            
+
             if (regressions > 0) {
               console.log(`\n${applyColor('⚠️  Performance Alert:', 'red')} ${regressions} comparison(s) showing regression`);
             } else if (improvements > noChange) {
@@ -1787,7 +1816,7 @@ async function main() {
               console.log(`\n${applyColor('✓ Performance Stable:', 'green')} No significant regressions detected`);
             }
           }
-          
+
           console.log(`${applyColor('═'.repeat(60), 'blue')}\n`);
           console.log(`${applyColor('All benchmarks complete!', 'green')}`);
         }
@@ -1795,7 +1824,7 @@ async function main() {
           const args = input.split(' ');
           let benchmarkArg: string | undefined = args[1];
           let runCount = 50;
-          
+
           // Check if first arg is a number (run count for all) or benchmark name
           if (benchmarkArg && !isNaN(parseInt(benchmarkArg))) {
             // First arg is a number, so running all benchmarks
@@ -1808,17 +1837,17 @@ async function main() {
               runCount = secondArg;
             }
           }
-          
+
           const benchmarkKeys = Object.keys(benchmarks);
           const dittoVersion = await getDittoVersion();
-          
+
           // Determine which benchmarks to run
           let benchmarksToRun: string[];
-          
+
           if (benchmarkArg) {
             // Specific benchmark requested
             let benchmarkName: string;
-            
+
             // Check if arg is a number (index)
             const index = parseInt(benchmarkArg);
             if (!isNaN(index) && index > 0 && index <= benchmarkKeys.length) {
@@ -1826,13 +1855,13 @@ async function main() {
             } else {
               benchmarkName = benchmarkArg;
             }
-            
+
             if (!benchmarks[benchmarkName as keyof typeof benchmarks]) {
               console.log(`Benchmark '${benchmarkArg}' not found. Use .benchmarks to see available benchmarks.`);
               rl.prompt();
               return;
             }
-            
+
             benchmarksToRun = [benchmarkName];
             console.log(`\n${applyColor(`Creating Baseline for: ${benchmarkName}`, 'blue')}`);
           } else {
@@ -1841,38 +1870,38 @@ async function main() {
             console.log(`\n${applyColor('Creating Baselines for All Benchmarks', 'blue')}`);
           }
           let overwritePolicy: 'ask' | 'all' | 'none' = 'ask';
-          
+
           console.log(`${applyColor('━'.repeat(50), 'blue')}`);
           console.log(`Ditto Version: ${dittoVersion}`);
           console.log(`Runs per baseline: ${runCount}\n`);
-          
+
           let skippedBaselines = 0;
           let benchmarkIndex = 0;
-          
+
           for (const benchmarkName of benchmarksToRun) {
             benchmarkIndex++;
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
-            
+
             console.log(`${applyColor(`Creating baseline (${benchmarkIndex}/${benchmarksToRun.length}): ${benchmarkName}`, 'blue')}`);
             console.log(`Hash: ${hash}`);
-            
+
             try {
               // Check if baseline already exists
               const existingBaseline = await getBaseline(ditto, hash, dittoVersion);
               if (existingBaseline) {
                 console.log(`${applyColor('⚠️  Baseline already exists for this version!', 'orange')}`);
                 console.log(`  Existing: ${existingBaseline.metrics.mean.toFixed(1)}ms (${existingBaseline.metrics.runs} runs, ${existingBaseline.metrics.timestamp})`);
-                
+
                 let shouldOverwrite = false;
-                
+
                 if (overwritePolicy === 'ask') {
                   const answer = await new Promise<string>((resolve) => {
                     rl.question('Overwrite existing baseline? (y/N/a=all/n=none): ', (answer) => {
                       resolve(answer.toLowerCase().trim());
                     });
                   });
-                  
+
                   if (answer === 'a' || answer === 'all') {
                     overwritePolicy = 'all';
                     shouldOverwrite = true;
@@ -1891,16 +1920,16 @@ async function main() {
                 } else if (overwritePolicy === 'none') {
                   shouldOverwrite = false;
                 }
-                
+
                 if (!shouldOverwrite) {
                   console.log(`${applyColor('Skipped baseline creation for:', 'blue')} ${benchmarkName}`);
                   console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
                   continue;
                 }
-                
+
                 console.log(`${applyColor('Overwriting existing baseline...', 'blue')}`);
               }
-              
+
               // Run pre-queries if they exist
               if (benchmark.preQueries && benchmark.preQueries.length > 0) {
                 console.log(`${applyColor('Running setup queries...', 'blue')}`);
@@ -1909,18 +1938,18 @@ async function main() {
                   await ditto.store.execute(preQuery);
                 }
               }
-              
+
               console.log(`Query: ${benchmark.query}`);
               const results = await benchmarkQuery(benchmark.query, runCount, benchmark.preQueries || [], false);
-            
+
               // Only save baseline if query is supported
               if (results.mean !== -1) {
                 // Create baseline document (truncate query if too long to fit in 256 byte _id limit)
                 const maxQueryLength = 100; // Conservative limit to ensure _id stays under 256 bytes
-                const queryForId = benchmark.query.length > maxQueryLength 
-                  ? `${benchmark.query.substring(0, maxQueryLength)}...` 
+                const queryForId = benchmark.query.length > maxQueryLength
+                  ? `${benchmark.query.substring(0, maxQueryLength)}...`
                   : benchmark.query;
-                  
+
                 const baseline: BenchmarkBaseline = {
                   _id: {
                     query: queryForId,
@@ -1940,13 +1969,13 @@ async function main() {
                     timestamp: new Date().toISOString()
                   }
                 };
-                
+
                 await saveBaseline(ditto, baseline);
                 console.log(`${applyColor('✓ Baseline saved', 'green')}`);
               } else {
                 console.log(`${applyColor('⚠️ Skipped baseline creation (feature not supported)', 'orange')}`);
               }
-              
+
               // Run post-queries if they exist
               if (benchmark.postQueries && benchmark.postQueries.length > 0) {
                 console.log(`${applyColor('Running cleanup queries...', 'blue')}`);
@@ -1959,12 +1988,12 @@ async function main() {
                   }
                 }
               }
-              
+
             } catch (error: any) {
               console.log(`${applyColor('❌ Baseline creation failed:', 'red')} ${error.message || error}`);
               console.log(`${applyColor('Skipping baseline for:', 'orange')} ${benchmarkName}`);
               skippedBaselines++;
-              
+
               // Try to run cleanup queries even if baseline creation failed
               if (benchmark.postQueries && benchmark.postQueries.length > 0) {
                 console.log(`${applyColor('Attempting cleanup after failure...', 'blue')}`);
@@ -1978,13 +2007,13 @@ async function main() {
                 }
               }
             }
-            
+
             console.log(`${applyColor('─'.repeat(50), 'blue')}\n`);
           }
-          
+
           const totalBaselines = benchmarksToRun.length;
           const successfulBaselines = totalBaselines - skippedBaselines;
-          
+
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
           console.log(`${applyColor('BASELINE CREATION SUMMARY', 'blue')}`);
           console.log(`${applyColor('═'.repeat(50), 'blue')}`);
@@ -1993,7 +2022,7 @@ async function main() {
           if (skippedBaselines > 0) {
             console.log(`  ${applyColor('Skipped (errors):', 'red')} ${skippedBaselines}`);
           }
-          
+
           if (skippedBaselines === 0) {
             console.log(`\n${applyColor('✅ All baselines created successfully!', 'green')}`);
           } else if (successfulBaselines > 0) {
@@ -2005,31 +2034,31 @@ async function main() {
         else if (input.toLowerCase() === '.benchmark_show') {
           const benchmarkKeys = Object.keys(benchmarks);
           const dittoVersion = await getDittoVersion();
-          
+
           console.log(`\n${applyColor('Loading saved baselines...', 'blue')}`);
-          
+
           // Collect all baseline data by benchmark and version
           const baselinesByBenchmark = new Map<string, Map<string, number>>();
           const allVersions = new Set<string>();
           allVersions.add(dittoVersion);
-          
+
           for (const benchmarkName of benchmarkKeys) {
             const benchmark = benchmarks[benchmarkName as keyof typeof benchmarks] as Benchmark;
             const hash = generateBenchmarkHash(benchmark.preQueries || [], benchmark.query);
-            
+
             // Get all baselines for this hash
             try {
               const result = await ditto.store.execute(
                 "SELECT * FROM COLLECTION benchmark_baselines (metrics MAP) WHERE _id.hash = :hash",
                 { hash }
               );
-              
+
               if (result.items.length > 0) {
                 if (!baselinesByBenchmark.has(benchmarkName)) {
                   baselinesByBenchmark.set(benchmarkName, new Map());
                 }
                 const benchmarkData = baselinesByBenchmark.get(benchmarkName)!;
-                
+
                 result.items.forEach(item => {
                   const baseline = item.value as BenchmarkBaseline;
                   if (baseline.metrics && baseline.metrics.mean !== undefined) {
@@ -2042,29 +2071,29 @@ async function main() {
               // Skip if error
             }
           }
-          
+
           if (baselinesByBenchmark.size === 0) {
             console.log(`\n${applyColor('No baseline data found!', 'orange')}`);
             console.log(`Run '.benchmark_baseline' to create baselines first.`);
             rl.prompt();
             return;
           }
-          
+
           // Generate comprehensive summary
           console.log(`\n${applyColor('═'.repeat(80), 'blue')}`);
           console.log(`${applyColor('SAVED BASELINES', 'blue')}`);
           console.log(`${applyColor('═'.repeat(80), 'blue')}\n`);
-          
+
           // Sort versions (current first, then by semver descending) - show ALL versions
           const sortedVersions = Array.from(allVersions).sort((a, b) => {
             if (a === dittoVersion) return -1;
             if (b === dittoVersion) return 1;
             return compareVersions(a, b);
           });
-          
+
           // Show all versions (no limit)
           const displayVersions = sortedVersions;
-          
+
           // Generate table header
           console.log('Benchmark Name                 ' + displayVersions.map(v => {
             if (v === dittoVersion) {
@@ -2074,20 +2103,20 @@ async function main() {
             }
           }).join(' '));
           console.log('─'.repeat(30) + ' ' + displayVersions.map(() => '─'.repeat(15)).join(' '));
-          
+
           // Helper function for formatting cells
           const formatCell = (value: number | undefined) => {
             if (value === undefined) return '       -       ';
             return value.toFixed(1).padStart(15);
           };
-          
+
           // Helper function for formatting diff cells
           const formatDiffCell = (current: number | undefined, baseline: number | undefined) => {
             if (current === undefined || baseline === undefined) return '       -       ';
-            
+
             const percentDiff = ((current - baseline) / baseline) * 100;
             const absoluteDiff = current - baseline;
-            
+
             // Color based on performance impact (matching table format)
             let color: 'green' | 'orange' | 'red' | 'blue';
             if (baseline < 10) {
@@ -2113,7 +2142,7 @@ async function main() {
                 color = 'red';
               }
             }
-            
+
             // Format the difference display
             let formattedOutput: string;
             if (baseline < 10) {
@@ -2125,21 +2154,21 @@ async function main() {
               const sign = percentDiff >= 0 ? '+' : '';
               formattedOutput = `${baseline.toFixed(1)} (${sign}${percentDiff.toFixed(0)}%)`;
             }
-            
+
             return applyColor(formattedOutput.padStart(15), color);
           };
-          
+
           // Sort benchmarks by name for consistent ordering
           const sortedBenchmarks = Array.from(baselinesByBenchmark.entries()).sort(([a], [b]) => a.localeCompare(b));
-          
+
           // Generate table rows
           for (const [benchmarkName, versionData] of sortedBenchmarks) {
             const row = [benchmarkName.padEnd(30)];
             const currentValue = versionData.get(dittoVersion);
-            
+
             for (const version of displayVersions) {
               const value = versionData.get(version);
-              
+
               if (version === dittoVersion || currentValue === undefined) {
                 // Current version or no current value - just show the value
                 row.push(formatCell(value));
@@ -2148,16 +2177,16 @@ async function main() {
                 row.push(formatDiffCell(currentValue, value));
               }
             }
-            
+
             console.log(row.join(' '));
           }
-          
+
           console.log(`\n${applyColor('Legend:', 'blue')}`);
           console.log(`  ${applyColor('Green', 'green')}  = Improvement (>1ms or >5% faster)`);
           console.log(`  ${applyColor('Orange', 'orange')} = Small regression (1-2ms or 5-15% slower)`);
           console.log(`  ${applyColor('Red', 'red')}    = Large regression (>2ms or >15% slower)`);
           console.log(`  ${applyColor('Blue', 'blue')}   = No significant change (≤1ms or ≤5%)`);
-          
+
           console.log(`\n${applyColor('Total benchmarks with baselines:', 'blue')} ${baselinesByBenchmark.size}`);
           console.log(`${applyColor('Total versions tracked:', 'blue')} ${allVersions.size}`);
         }
@@ -2169,15 +2198,15 @@ async function main() {
             rl.prompt();
             return;
           }
-          
+
           let query = input.substring(queryStart).trim();
-          
+
           // Remove quotes if present
-          if ((query.startsWith('"') && query.endsWith('"')) || 
-              (query.startsWith("'") && query.endsWith("'"))) {
+          if ((query.startsWith('"') && query.endsWith('"')) ||
+            (query.startsWith("'") && query.endsWith("'"))) {
             query = query.slice(1, -1);
           }
-          
+
           await benchmarkQuery(query, 20, [], false); // Don't compare baseline for ad-hoc queries
         }
         else if (input.toLowerCase().startsWith('.export ')) {
@@ -2191,45 +2220,45 @@ async function main() {
             rl.prompt();
             return;
           }
-          
+
           const query = input.substring(queryStart).trim();
-          
+
           console.log(`\n${applyColor('Executing export query...', 'blue')}`);
           console.log(`Query: ${applyColor(query, 'green')}`);
-          
+
           try {
             // Execute the query
             const result = await ditto.store.execute(query);
-            
+
             if (result.items.length === 0) {
               console.log(`${applyColor('No documents returned by query', 'orange')}`);
               rl.prompt();
               return;
             }
-            
+
             // Prepare NDJSON content
             const ndjsonLines = result.items.map(item => JSON.stringify(item.value));
             const ndjsonContent = ndjsonLines.join('\n');
-            
+
             // Create exports directory if it doesn't exist
             const exportsDir = path.join(process.cwd(), 'exports');
             if (!fs.existsSync(exportsDir)) {
               fs.mkdirSync(exportsDir, { recursive: true });
             }
-            
+
             // Generate filename with timestamp
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `export_${timestamp}.ndjson`;
             const filepath = path.join(exportsDir, filename);
-            
+
             fs.writeFileSync(filepath, ndjsonContent);
-            
+
             console.log(`${applyColor('✅ Export successful!', 'green')}`);
             console.log(`  Documents exported: ${result.items.length}`);
             console.log(`  File: ${filepath}`);
             console.log(`  Size: ${(Buffer.byteLength(ndjsonContent) / 1024).toFixed(2)} KB`);
             console.log(`  Query: ${query}`);
-            
+
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.log(`${applyColor('❌ Export failed:', 'red')} ${errorMessage}`);
@@ -2258,14 +2287,14 @@ async function main() {
         else if (input.toLowerCase().startsWith('.generate_movies ')) {
           const args = input.split(' ');
           const countStr = args[1];
-          
+
           if (!countStr) {
             console.log('Usage: .generate_movies <count>');
             console.log('Example: .generate_movies 1000');
             rl.prompt();
             return;
           }
-          
+
           const count = parseInt(countStr);
           if (isNaN(count) || count <= 0) {
             console.log(`${applyColor('Invalid count:', 'red')} ${countStr}`);
@@ -2273,7 +2302,7 @@ async function main() {
             rl.prompt();
             return;
           }
-          
+
           if (count > 100000) {
             console.log(`${applyColor('Warning:', 'orange')} Generating ${count} movies may take a while and use significant resources.`);
             const answer = await new Promise<string>((resolve) => {
@@ -2281,14 +2310,14 @@ async function main() {
                 resolve(answer.toLowerCase().trim());
               });
             });
-            
+
             if (answer !== 'y' && answer !== 'yes') {
               console.log('Cancelled.');
               rl.prompt();
               return;
             }
           }
-          
+
           await generateMovies(ditto, count);
         }
         else if (input.startsWith('.')) {
@@ -2315,15 +2344,15 @@ async function main() {
 main();
 
 type TextColors = 'blue' | 'red' | 'green' /*| 'yellow_highlight'*/ | 'orange';
-const applyColor = (text:string, color:TextColors) => {
-  switch(color){
+const applyColor = (text: string, color: TextColors) => {
+  switch (color) {
     case 'blue': return `\x1b[34m${text}\x1b[0m`;
     case 'red': return `\x1b[31m${text}\x1b[0m`;
     case 'green': return `\x1b[32m${text}\x1b[0m`;
-   //case 'yellow_highlight': return `\x1b[43m${text}\x1b[0m`;
+    //case 'yellow_highlight': return `\x1b[43m${text}\x1b[0m`;
     case 'orange': return `\x1b[38;5;202m${text}\x1b[0m`;
 
-    // Handler for generic cases where AI makes up a new color and we're not running through ts compiler 
-    return `\x1b[0m${text}\x1b[0m`
+      // Handler for generic cases where AI makes up a new color and we're not running through ts compiler 
+      return `\x1b[0m${text}\x1b[0m`
   }
 }
