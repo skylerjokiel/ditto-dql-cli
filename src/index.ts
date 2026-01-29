@@ -937,9 +937,14 @@ async function main() {
         avgDocSize = 'Unable to calculate';
       }
 
+      // Check DITTO_DISABLE_ALWAYS_DEBUG_ON_DISK_LOGS environment variable
+      const disableAlwaysDebug = process.env.DITTO_DISABLE_ALWAYS_DEBUG_ON_DISK_LOGS;
+      const isDebugLoggingEnabled = disableAlwaysDebug === '' || disableAlwaysDebug === '0' || disableAlwaysDebug === undefined;
+
       console.log(`\nDatabase Configuration:`);
       console.log(`  DQL Strict Mode: ${applyColor(dqlStrictMode, dqlStrictMode === 'false' ? 'green' : 'orange')}`);
       console.log(`  Sync Enabled: ${applyColor('false', 'green')} (disabled for benchmarking)`);
+      console.log(`  Always Debug Logs: ${applyColor(isDebugLoggingEnabled ? 'enabled' : 'disabled', isDebugLoggingEnabled ? 'green' : 'orange')}`);
 
       console.log(`\nDocument Statistics (sample of 100):`);
       console.log(`  Average Size: ${applyColor(avgDocSize, 'green')}`);
