@@ -29,7 +29,7 @@ const benchmarks = JSON.parse(readFileSync(join(baseDir, 'benchmarks.json'), 'ut
 const packageJson = JSON.parse(readFileSync(join(baseDir, 'package.json'), 'utf-8'));
 
 // Setup auto-logging with circular buffer
-DittoLogger.enabled = true;
+DittoLogger.enabled = false;
 DittoLogger.minimumLogLevel = 'Info';
 const levelNames: Record<LogLevel, string> = {
   'Error': 'ERROR',
